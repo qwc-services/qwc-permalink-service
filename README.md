@@ -1,5 +1,5 @@
-QWC Permalinks Service
-======================
+QWC Permalink Service
+=====================
 
 Stores and resolves compact permalinks for the Web Client.
 

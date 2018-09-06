@@ -15,8 +15,8 @@ from qwc_services_core.jwt import jwt_manager
 
 # Flask application
 app = Flask(__name__)
-api = Api(app, version='1.0', title='Permalinks API',
-          description='API for QWC Permalinks service',
+api = Api(app, version='1.0', title='Permalink API',
+          description='API for QWC Permalink service',
           default_label='Permalink operations', doc='/api/')
 
 # disable verbose 404 error message
