@@ -1,0 +1,4 @@
+Flask
+flask-restplus
+git+https://github.com/qwc-services/qwc-config-db.git#egg=qwc-config-db
+git+https://github.com/qwc-services/qwc-services-core.git#egg=qwc-services-core
