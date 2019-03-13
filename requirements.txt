@@ -1,4 +1,4 @@
-Flask
-flask-restplus
+Flask==1.0.2
+flask-restplus==0.12.1
 git+https://github.com/qwc-services/qwc-config-db.git#egg=qwc-config-db
 git+https://github.com/qwc-services/qwc-services-core.git#egg=qwc-services-core
