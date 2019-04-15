@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_restplus import Api, Resource, reqparse
-from flask_jwt_extended import jwt_optional
+from flask_jwt_extended import jwt_optional, get_jwt_identity
 import datetime
 import hashlib
 import random
@@ -27,7 +27,8 @@ jwt = jwt_manager(app, api)
 
 db_engine = DatabaseEngine()
 configdb = db_engine.config_db()
-table = "qwc_config.permalinks"
+PERMALINKS_TABLE = "qwc_config.permalinks"
+USER_PERMALINK_TABLE = "qwc_config.user_permalinks"
 
 # request parser
 createpermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
@@ -65,7 +66,7 @@ class CreatePermalink(Resource):
         sql = sql_text("""
             INSERT INTO {table} (key, data, date)
             VALUES (:key, :data, :date)
-        """.format(table=table))
+        """.format(table=PERMALINKS_TABLE))
 
         attempts = 0
         while attempts < 100:
@@ -102,13 +103,72 @@ class ResolvePermalink(Resource):
             SELECT data
             FROM {table}
             WHERE key = :key
-        """.format(table=table))
+        """.format(table=PERMALINKS_TABLE))
         try:
             data = json.loads(configconn.execute(sql, key=key).first().data)
         except:
             pass
         return jsonify(data)
 
+@api.route('/userpermalink')
+class UserPermalink(Resource):
+    @api.doc('getuserpermalink')
+    @jwt_optional
+    def get(self):
+        username = get_jwt_identity()
+        if not username:
+            return jsonify({})
+
+        configconn = configdb.connect()
+        sql = sql_text("""
+            SELECT data
+            FROM {table}
+            WHERE username = :user
+        """.format(table=USER_PERMALINK_TABLE))
+        try:
+            data = json.loads(configconn.execute(sql, user=username).first().data)
+        except:
+            data = {}
+        return jsonify(data)
+
+    @api.doc('postuserpermalink')
+    @api.param('url', 'The URL for which to generate a permalink', 'query')
+    @api.param('payload', 'A json document with the state to store in the permalink', 'body')
+    @api.expect(createpermalink_parser)
+    @jwt_optional
+    def post(self):
+        username = get_jwt_identity()
+        if not username:
+            return jsonify({"success": False})
+
+        args = createpermalink_parser.parse_args()
+        url = args['url']
+        parts = urlparse(url)
+        query = parse_qs(parts.query, keep_blank_values=True)
+        for key in query:
+            query[key] = query[key][0]
+        data = {
+            "query": query,
+            "state": request.json
+        }
+
+        # Insert into databse
+        conn = configdb.connect()
+        datastr = json.dumps(data)
+        date = datetime.date.today().strftime(r"%Y-%m-%d")
+        sql = sql_text("""
+            INSERT INTO {table} (username, data, date)
+            VALUES (:user, :data, :date)
+            ON CONFLICT (username)
+            DO
+            UPDATE
+            SET data = :data, date = :date
+        """.format(table=USER_PERMALINK_TABLE))
+
+        conn.execute(sql, user=username, data=datastr, date=date)
+        conn.close()
+
+        return jsonify({"success": True})
 
 if __name__ == "__main__":
     print("Starting Permalink service...")
