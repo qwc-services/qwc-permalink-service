@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import random
 import json
+import os
 from urllib.parse import urlparse, parse_qs
 from sqlalchemy.sql import text as sql_text
 
@@ -26,9 +27,10 @@ app.config['ERROR_404_HELP'] = False
 jwt = jwt_manager(app, api)
 
 db_engine = DatabaseEngine()
-configdb = db_engine.config_db()
-PERMALINKS_TABLE = "qwc_config.permalinks"
-USER_PERMALINK_TABLE = "qwc_config.user_permalinks"
+configdb = db_engine.db_engine_env('CONFIGDB_URL',
+                                   'postgresql:///?service=qwc_configdb')
+PERMALINKS_TABLE = os.environ.get('PERMALINKS_TABLE', 'qwc_config.permalinks')
+USER_PERMALINK_TABLE = os.environ.get('USER_PERMALINK_TABLE', 'qwc_config.user_permalinks')
 
 # request parser
 createpermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
