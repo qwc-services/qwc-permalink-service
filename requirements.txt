@@ -1,4 +1,6 @@
 Flask==1.0.2
+Flask-JWT-Extended==3.5.1
 flask-restplus==0.12.1
-psycopg2
+psycopg2==2.7.7
+SQLAlchemy==1.2.18
 git+https://github.com/qwc-services/qwc-services-core.git#egg=qwc-services-core

@@ -52,6 +52,7 @@ Activate virtual environment:
 Install requirements:
 
     pip install -r requirements.txt
+    pip install flask_cors
 
 Start local service:
 
