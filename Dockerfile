@@ -1,6 +1,6 @@
 # WSGI service environment
 
-FROM husseinkabbout/qwc-docker
+FROM sourcepole/qwc-uwsgi-base:alpine-latest
 
 # Install service packages if needed
 RUN apk add --no-cache --update postgresql-dev gcc python3-dev musl-dev git
