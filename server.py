@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_restplus import Api, Resource, reqparse
 from flask_jwt_extended import jwt_optional, get_jwt_identity
 import datetime
@@ -171,6 +171,26 @@ class UserPermalink(Resource):
         conn.close()
 
         return jsonify({"success": True})
+
+
+""" readyness probe endpoint """
+@app.route("/ready", methods=['GET'])
+def ready():
+    return jsonify({"status": "OK"})
+
+
+""" liveness probe endpoint """
+@app.route("/healthz", methods=['GET'])
+def healthz():
+    try:
+        configdb.connect()
+    except Exception as e:
+        return make_response(jsonify(
+            {"status": "FAIL", "cause":
+                str(e)}), 500)
+
+    return jsonify({"status": "OK"})
+
 
 if __name__ == "__main__":
     print("Starting Permalink service...")
