@@ -35,8 +35,7 @@
       },
       "required": [
         "db_url",
-        "permalinks_table",
-        "user_permalink_table"
+        "permalinks_table"
       ]
     }
   },
