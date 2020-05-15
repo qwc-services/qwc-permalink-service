@@ -1,3 +1,6 @@
+[![](https://github.com/qwc-services/qwc-permalink-service/workflows/build/badge.svg)](https://hub.docker.com/repository/docker/sourcepole/qwc-permalink-service)
+[![](https://img.shields.io/docker/pulls/sourcepole/qwc-permalink-service)](https://hub.docker.com/repository/docker/sourcepole/qwc-permalink-service)
+
 QWC Permalink Service
 =====================
 
