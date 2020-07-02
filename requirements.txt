@@ -5,4 +5,4 @@ psycopg2==2.7.7
 SQLAlchemy==1.2.18
 werkzeug==0.16.1
 jsonschema==2.6.0
-git+https://github.com/qwc-services/qwc-services-core.git#egg=qwc-services-core
+git+https://github.com/qwc-services/qwc-services-core.git@7781a0016a38c09ad020ed03f31478b0cf0802d2#egg=qwc-services-core
