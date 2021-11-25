@@ -207,7 +207,7 @@ class UserBookmarksList(Resource):
 
         conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
-            SELECT data, key, description
+            SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
             FROM {table}
             WHERE username = :user
         """.format(table=user_bookmark_table))
@@ -219,6 +219,7 @@ class UserBookmarksList(Resource):
                 bookmark['data'] = json.loads(row.data)
                 bookmark['key'] = row.key
                 bookmark['description'] = row.description
+                bookmark['date'] = row.date
                 data.append(bookmark)
         except:
             data = []
