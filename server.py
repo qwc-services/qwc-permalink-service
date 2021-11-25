@@ -205,12 +205,16 @@ class UserBookmarksList(Resource):
         if not username:
             return jsonify([])
 
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        sort_order = config.get('bookmarks_sort_order', 'date, description')
+
         conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
             FROM {table}
-            WHERE username = :user
-        """.format(table=user_bookmark_table))
+            WHERE username = :user ORDER BY {sort_order}
+        """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
             result = conn.execute(sql, user=username)

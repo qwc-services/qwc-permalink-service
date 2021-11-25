@@ -31,6 +31,10 @@
         "user_permalink_table": {
           "description": "User permalink table",
           "type": "string"
+        },
+        "bookmarks_sort_order": {
+          "description": "Bookmarks sort order, defaults to \"date, description\"",
+          "type": "string"
         }
       },
       "required": [
