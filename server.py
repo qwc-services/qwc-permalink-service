@@ -6,6 +6,7 @@ import hashlib
 import random
 import json
 import os
+import time
 from urllib.parse import urlparse, parse_qs
 from sqlalchemy.sql import text as sql_text
 
@@ -84,7 +85,7 @@ class CreatePermalink(Resource):
         # Insert into databse
         configconn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
-        hexdigest = hashlib.sha224(datastr.encode('utf-8')).hexdigest()[0:9]
+        hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
         sql = sql_text("""
             INSERT INTO {table} (key, data, date)
@@ -245,10 +246,10 @@ class UserBookmarksList(Resource):
             "state": request.json
         }
 
-        # Insert into databse
+        # Insert into database
         conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
-        hexdigest = hashlib.sha224(datastr.encode('utf-8')).hexdigest()[0:9]
+        hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
         description = args['description']
