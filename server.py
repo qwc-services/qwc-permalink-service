@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, make_response
 from flask_restx import Api, Resource, reqparse
-from flask_jwt_extended import jwt_optional, get_jwt_identity
 import datetime
 import hashlib
 import random
@@ -10,9 +9,9 @@ import time
 from urllib.parse import urlparse, parse_qs
 from sqlalchemy.sql import text as sql_text
 
+from qwc_services_core.auth import auth_manager, optional_auth, get_identity
 from qwc_services_core.api import CaseInsensitiveArgument
 from qwc_services_core.database import DatabaseEngine
-from qwc_services_core.jwt import jwt_manager
 from qwc_services_core.tenant_handler import TenantHandler
 from qwc_services_core.runtime_config import RuntimeConfig
 
@@ -29,7 +28,7 @@ bk = api.namespace('bookmarks', description='Bookmarks operations')
 app.config['ERROR_404_HELP'] = False
 
 # Setup the Flask-JWT-Extended extension
-jwt = jwt_manager(app, api)
+jwt = auth_manager(app, api)
 
 tenant_handler = TenantHandler(app.logger)
 config_handler = RuntimeConfig("permalink", app.logger)
@@ -69,7 +68,7 @@ class CreatePermalink(Resource):
     @api.param('url', 'The URL for which to generate a permalink', 'query')
     @api.param('payload', 'A json document with the state to store in the permalink', 'body')
     @api.expect(createpermalink_parser)
-    @jwt_optional
+    @optional_auth
     def post(self):
         args = createpermalink_parser.parse_args()
         url = args['url']
@@ -118,7 +117,7 @@ class ResolvePermalink(Resource):
     @api.doc('resolvepermalink')
     @api.param('key', 'The permalink key to resolve')
     @api.expect(resolvepermalink_parser)
-    @jwt_optional
+    @optional_auth
     def get(self):
         args = resolvepermalink_parser.parse_args()
         key = args['key']
@@ -139,9 +138,9 @@ class ResolvePermalink(Resource):
 @api.route('/userpermalink')
 class UserPermalink(Resource):
     @api.doc('getuserpermalink')
-    @jwt_optional
+    @optional_auth
     def get(self):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify({})
 
@@ -161,9 +160,9 @@ class UserPermalink(Resource):
     @api.param('url', 'The URL for which to generate a permalink', 'query')
     @api.param('payload', 'A json document with the state to store in the permalink', 'body')
     @api.expect(createpermalink_parser)
-    @jwt_optional
+    @optional_auth
     def post(self):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify({"success": False})
 
@@ -199,9 +198,9 @@ class UserPermalink(Resource):
 @bk.route('/')
 class UserBookmarksList(Resource):
     @bk.doc('getbookmarks')
-    @jwt_optional
+    @optional_auth
     def get(self):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify([])
 
@@ -234,9 +233,9 @@ class UserBookmarksList(Resource):
     @bk.param('payload', 'A json document with the state to store in the bookmark', 'body')
     @bk.param('description', 'Description to store in the bookmark', 'query')
     @bk.expect(userbookmark_parser)    
-    @jwt_optional
+    @optional_auth
     def post(self):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify({"success": False})
         
@@ -284,9 +283,9 @@ class UserBookmarksList(Resource):
 @bk.route('/<key>')
 class UserBookmark(Resource):
     @bk.doc('getbookmark')
-    @jwt_optional
+    @optional_auth
     def get(self, key):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify({"success": False})
 
@@ -303,9 +302,9 @@ class UserBookmark(Resource):
         return jsonify(data)
 
     @bk.doc('deletebookmark')
-    @jwt_optional
+    @optional_auth
     def delete(self, key):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify({"success": False})
         
@@ -326,9 +325,9 @@ class UserBookmark(Resource):
     @bk.param('payload', 'A json document with the state to store in the bookmark', 'body')
     @bk.param('description', 'Description to store in the bookmark', 'query')
     @bk.expect(userbookmark_parser)    
-    @jwt_optional
+    @optional_auth
     def put(self, key):
-        username = get_jwt_identity()
+        username = get_identity()
         if not username:
             return jsonify({"success": False})
         

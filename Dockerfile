@@ -1,6 +1,6 @@
 # WSGI service environment
 
-FROM sourcepole/qwc-uwsgi-base:alpine-v2021.12.16
+FROM sourcepole/qwc-uwsgi-base:alpine-v2022.01.08
 
 # Install service packages if needed
 RUN apk add --no-cache --update postgresql-dev gcc python3-dev musl-dev git
