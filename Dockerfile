@@ -1,11 +1,13 @@
-# WSGI service environment
-
 FROM sourcepole/qwc-uwsgi-base:alpine-v2022.01.26
 
-# Install service packages if needed
-RUN apk add --no-cache --update postgresql-dev gcc python3-dev musl-dev git
-
-# maybe set locale here if needed
-
 ADD . /srv/qwc_service
-RUN pip3 install --no-cache-dir -r /srv/qwc_service/requirements.txt
+
+# git: Required for pip with git repos
+# postgresql-dev g++ python3-dev: Required for psycopg2-binary
+RUN \
+    apk add --no-cache --update --virtual runtime-deps postgresql-libs && \
+    apk add --no-cache --update --virtual build-deps git postgresql-dev g++ python3-dev && \
+    pip3 install --no-cache-dir -r /srv/qwc_service/requirements.txt && \
+    apk del build-deps
+
+ENV SERVICE_MOUNTPOINT=/api/v1/permalink
