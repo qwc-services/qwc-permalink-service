@@ -11,3 +11,6 @@ RUN \
     apk del build-deps
 
 ENV SERVICE_MOUNTPOINT=/api/v1/permalink
+# Support very long URLs (14k)
+# https://uwsgi-docs.readthedocs.io/en/latest/Options.html#buffer-size
+ENV REQ_HEADER_BUFFER_SIZE=14336
