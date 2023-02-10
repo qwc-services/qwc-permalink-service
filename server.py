@@ -278,7 +278,7 @@ class UserBookmarksList(Resource):
         
         conn.close()
 
-        return jsonify({"success": True})
+        return jsonify({"success": attempts < 100})
 
 @bk.route('/<key>')
 class UserBookmark(Resource):
