@@ -37,13 +37,13 @@ db_engine = DatabaseEngine()
 
 # request parser
 createpermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
-createpermalink_parser.add_argument('url', required=True)
+createpermalink_parser.add_argument('url', required=False)
 
 resolvepermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
 resolvepermalink_parser.add_argument('key', required=True)
 
 userbookmark_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
-userbookmark_parser.add_argument('url', required=True)
+userbookmark_parser.add_argument('url', required=False)
 userbookmark_parser.add_argument('description')
 
 def db_conn():
@@ -71,14 +71,22 @@ class CreatePermalink(Resource):
     @optional_auth
     def post(self):
         args = createpermalink_parser.parse_args()
-        url = args['url']
+        state = request.json
+        if "url" in state:
+            url = state["url"]
+            del state["url"]
+        elif "url" in args:
+            url = args['url']
+        else:
+            api.abort(400, "No URL specified")
+
         parts = urlparse(url)
         query = parse_qs(parts.query, keep_blank_values=True)
         for key in query:
             query[key] = query[key][0]
         data = {
             "query": query,
-            "state": request.json
+            "state": state
         }
 
         # Insert into databse
@@ -167,14 +175,21 @@ class UserPermalink(Resource):
             return jsonify({"success": False})
 
         args = createpermalink_parser.parse_args()
-        url = args['url']
+        state = request.json
+        if "url" in state:
+            url = state["url"]
+            del state["url"]
+        elif "url" in args:
+            url = args['url']
+        else:
+            api.abort(400, "No URL specified")
         parts = urlparse(url)
         query = parse_qs(parts.query, keep_blank_values=True)
         for key in query:
             query[key] = query[key][0]
         data = {
             "query": query,
-            "state": request.json
+            "state": state
         }
 
         # Insert into databse
@@ -240,14 +255,21 @@ class UserBookmarksList(Resource):
             return jsonify({"success": False})
         
         args = userbookmark_parser.parse_args()
-        url = args['url']
+        state = request.json
+        if "url" in state:
+            url = state["url"]
+            del state["url"]
+        elif "url" in args:
+            url = args['url']
+        else:
+            api.abort(400, "No URL specified")
         parts = urlparse(url)
         query = parse_qs(parts.query, keep_blank_values=True)
         for key in query:
             query[key] = query[key][0]
         data = {
             "query": query,
-            "state": request.json
+            "state": state
         }
 
         # Insert into database
@@ -332,14 +354,21 @@ class UserBookmark(Resource):
             return jsonify({"success": False})
         
         args = userbookmark_parser.parse_args()
-        url = args['url']
+        state = request.json
+        if "url" in state:
+            url = state["url"]
+            del state["url"]
+        elif "url" in args:
+            url = args['url']
+        else:
+            api.abort(400, "No URL specified")
         parts = urlparse(url)
         query = parse_qs(parts.query, keep_blank_values=True)
         for k in query:
             query[k] = query[k][0]
         data = {
             "query": query,
-            "state": request.json
+            "state": state
         }
 
         # Update into databse
