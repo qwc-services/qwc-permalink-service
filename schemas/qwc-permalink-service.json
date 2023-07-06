@@ -21,19 +21,23 @@
       "type": "object",
       "properties": {
         "db_url": {
-          "description": "DB connection URL",
+          "description": "DB connection URL. Defaults to postgresql:///?service=qwc_configdb.",
           "type": "string"
         },
         "permalinks_table": {
-          "description": "Permalink table",
+          "description": "Permalink table. Defaults to qwc_config.permalinks.",
           "type": "string"
         },
         "user_permalink_table": {
-          "description": "User permalink table",
+          "description": "User permalink table. Defaults to qwc_config.user_permalinks.",
+          "type": "string"
+        },
+        "user_bookmark_table": {
+          "description": "User bookmarks table. Defaults to qwc_config.user_bookmarks.",
           "type": "string"
         },
         "bookmarks_sort_order": {
-          "description": "Bookmarks sort order, defaults to \"date, description\"",
+          "description": "Bookmarks sort order, defaults to \"date, description\".",
           "type": "string"
         }
       },
