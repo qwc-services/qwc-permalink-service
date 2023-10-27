@@ -71,6 +71,11 @@ class CreatePermalink(Resource):
     @optional_auth
     def post(self):
         args = createpermalink_parser.parse_args()
+
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        self.default_expiry_period = config.get('default_expiry_period', None)
+
         state = request.json
         if "url" in state:
             url = state["url"]
@@ -94,26 +99,40 @@ class CreatePermalink(Resource):
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
+        expires = None
+        if self.default_expiry_period:
+            delta = datetime.timedelta(days=self.default_expiry_period)
+            expires = (datetime.date.today() + delta).strftime(r"%Y-%m-%d")
+
         sql = sql_text("""
-            INSERT INTO {table} (key, data, date)
-            VALUES (:key, :data, :date)
+            INSERT INTO {table} (key, data, date, expires)
+            VALUES (:key, :data, :date, :expires)
         """.format(table=permalinks_table))
 
         attempts = 0
         while attempts < 100:
             try:
-                configconn.execute(sql, key=hexdigest, data=datastr, date=date)
+                configconn.execute(sql, key=hexdigest, data=datastr, date=date, expires=expires)
                 break
             except:
                 pass
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
+
+        # Delete permalinks past expiry date
+        sql = sql_text("""
+            DELETE FROM {table}
+            WHERE expires < CURRENT_DATE
+        """.format(table=permalinks_table))
+        configconn.execute(sql)
+
         configconn.close()
 
         # Return
         if attempts < 100:
             result = {
-                "permalink": parts.scheme + "://" + parts.netloc + parts.path + "?k=" + hexdigest
+                "permalink": parts.scheme + "://" + parts.netloc + parts.path + "?k=" + hexdigest,
+                "expires": expires
             }
         else:
             result = {"message": "Failed to generate compact permalink"}
@@ -134,7 +153,7 @@ class ResolvePermalink(Resource):
         sql = sql_text("""
             SELECT data
             FROM {table}
-            WHERE key = :key
+            WHERE key = :key AND expires >= CURRENT_DATE
         """.format(table=permalinks_table))
         try:
             data = json.loads(configconn.execute(sql, key=key).first().data)

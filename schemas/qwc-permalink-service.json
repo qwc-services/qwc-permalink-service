@@ -39,6 +39,10 @@
         "bookmarks_sort_order": {
           "description": "Bookmarks sort order, defaults to \"date, description\".",
           "type": "string"
+        },
+        "default_expiry_period": {
+          "description": "Default expiry period for permalinks, in days. Default: null (no expiry)",
+          "type": "number"
         }
       },
       "required": [
