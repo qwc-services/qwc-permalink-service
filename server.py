@@ -153,7 +153,7 @@ class ResolvePermalink(Resource):
         sql = sql_text("""
             SELECT data
             FROM {table}
-            WHERE key = :key AND expires >= CURRENT_DATE
+            WHERE key = :key AND (expires IS NULL OR expires >= CURRENT_DATE)
         """.format(table=permalinks_table))
         try:
             data = json.loads(configconn.execute(sql, key=key).first().data)
