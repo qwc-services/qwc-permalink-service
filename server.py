@@ -9,7 +9,7 @@ import time
 from urllib.parse import urlparse, parse_qs
 from sqlalchemy.sql import text as sql_text
 
-from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user, get_username
+from qwc_services_core.auth import auth_manager, optional_auth, get_identity, get_username
 from qwc_services_core.api import CaseInsensitiveArgument
 from qwc_services_core.database import DatabaseEngine
 from qwc_services_core.tenant_handler import TenantHandler
@@ -167,7 +167,7 @@ class UserPermalink(Resource):
     @api.doc('getuserpermalink')
     @optional_auth
     def get(self):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify({})
 
@@ -189,7 +189,7 @@ class UserPermalink(Resource):
     @api.expect(createpermalink_parser)
     @optional_auth
     def post(self):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
 
@@ -234,7 +234,7 @@ class UserBookmarksList(Resource):
     @bk.doc('getbookmarks')
     @optional_auth
     def get(self):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify([])
 
@@ -269,7 +269,7 @@ class UserBookmarksList(Resource):
     @bk.expect(userbookmark_parser)    
     @optional_auth
     def post(self):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
         
@@ -326,7 +326,7 @@ class UserBookmark(Resource):
     @bk.doc('getbookmark')
     @optional_auth
     def get(self, key):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
 
@@ -345,7 +345,7 @@ class UserBookmark(Resource):
     @bk.doc('deletebookmark')
     @optional_auth
     def delete(self, key):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
         
@@ -368,7 +368,7 @@ class UserBookmark(Resource):
     @bk.expect(userbookmark_parser)    
     @optional_auth
     def put(self, key):
-        username = get_username(get_auth_user())
+        username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
         
