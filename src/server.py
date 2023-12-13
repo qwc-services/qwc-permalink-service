@@ -112,7 +112,7 @@ class CreatePermalink(Resource):
         attempts = 0
         while attempts < 100:
             try:
-                configconn.execute(sql, key=hexdigest, data=datastr, date=date, expires=expires)
+                configconn.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires})
                 break
             except:
                 pass
@@ -126,6 +126,7 @@ class CreatePermalink(Resource):
         """.format(table=permalinks_table))
         configconn.execute(sql)
 
+        configconn.commit()
         configconn.close()
 
         # Return
@@ -156,7 +157,7 @@ class ResolvePermalink(Resource):
             WHERE key = :key AND (expires IS NULL OR expires >= CURRENT_DATE)
         """.format(table=permalinks_table))
         try:
-            data = json.loads(configconn.execute(sql, key=key).first().data)
+            data = json.loads(configconn.execute(sql, {"key": key}).mappings().first()["data"])
         except:
             pass
         return jsonify(data)
@@ -178,7 +179,7 @@ class UserPermalink(Resource):
             WHERE username = :user
         """.format(table=user_permalink_table))
         try:
-            data = json.loads(configconn.execute(sql, user=username).first().data)
+            data = json.loads(configconn.execute(sql, {"user": username}).mappings().first()["data"])
         except:
             data = {}
         return jsonify(data)
@@ -224,7 +225,8 @@ class UserPermalink(Resource):
             SET data = :data, date = :date
         """.format(table=user_permalink_table))
 
-        conn.execute(sql, user=username, data=datastr, date=date)
+        conn.execute(sql, {"user": username, "data": datastr, "date": date})
+        conn.commit()
         conn.close()
 
         return jsonify({"success": True})
@@ -250,7 +252,7 @@ class UserBookmarksList(Resource):
         """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
-            result = conn.execute(sql, user=username)
+            result = conn.execute(sql, {"user": username}).mappings()
             for row in result:
                 bookmark = {}
                 bookmark['data'] = json.loads(row.data)
@@ -310,13 +312,14 @@ class UserBookmarksList(Resource):
         attempts = 0
         while attempts < 100:
             try:
-                conn.execute(sql, user=username, data=datastr, key=hexdigest, date=date, description=description)
+                conn.execute(sql, {"user": username, "data": datastr, "key": hexdigest, "date": date, "description": description})
                 break
             except:
                 pass
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
         
+        conn.commit()
         conn.close()
 
         return jsonify({"success": attempts < 100})
@@ -337,7 +340,7 @@ class UserBookmark(Resource):
             WHERE username = :user and key = :key
         """.format(table=user_bookmark_table))
         try:
-            data = json.loads(conn.execute(sql, user=username, key=key).first().data)              
+            data = json.loads(conn.execute(sql, {"user": username, "key": key}).mappings().first()["data"])
         except:
             data = {}
         return jsonify(data)
@@ -356,7 +359,8 @@ class UserBookmark(Resource):
             WHERE key = :key and username = :username
         """.format(table=user_bookmark_table))
 
-        conn.execute(sql, key=key, username=username)
+        conn.execute(sql, {"key": key, "username": username})
+        conn.commit()
         conn.close()
 
         return jsonify({"success": True})
@@ -402,7 +406,8 @@ class UserBookmark(Resource):
             WHERE username = :user and key = :key
         """.format(table=user_bookmark_table))
 
-        conn.execute(sql, user=username, data=datastr, key=key, date=date, description=description)
+        conn.execute(sql, {"user": username, "data": datastr, "key": key, "date": date, "description": description})
+        conn.commit()
         conn.close()
 
         return jsonify({"success": True})
