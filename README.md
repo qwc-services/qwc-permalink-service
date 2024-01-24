@@ -51,7 +51,8 @@ Example:
     (
       key character(10) NOT NULL PRIMARY KEY,
       data text,
-      date date
+      date date,
+      expires date
     );
 
 
