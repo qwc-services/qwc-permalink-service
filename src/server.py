@@ -57,8 +57,7 @@ def db_conn():
     user_bookmark_table = config.get('user_bookmark_table', 'qwc_config.user_bookmarks')
 
     db = db_engine.db_engine(db_url)
-    conn = db.connect()
-    return (conn, permalinks_table, user_permalink_table, user_bookmark_table)
+    return (db, permalinks_table, user_permalink_table, user_bookmark_table)
 
 
 @api.route('/createpermalink')
@@ -95,7 +94,7 @@ class CreatePermalink(Resource):
         }
 
         # Insert into databse
-        configconn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
@@ -112,7 +111,8 @@ class CreatePermalink(Resource):
         attempts = 0
         while attempts < 100:
             try:
-                configconn.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires})
+                with db_engine.begin() as connection:
+                    connection.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires})
                 break
             except:
                 pass
@@ -124,10 +124,8 @@ class CreatePermalink(Resource):
             DELETE FROM {table}
             WHERE expires < CURRENT_DATE
         """.format(table=permalinks_table))
-        configconn.execute(sql)
-
-        configconn.commit()
-        configconn.close()
+        with db_engine.begin() as connection:
+            connection.execute(sql)
 
         # Return
         if attempts < 100:
@@ -150,14 +148,15 @@ class ResolvePermalink(Resource):
         args = resolvepermalink_parser.parse_args()
         key = args['key']
         data = {}
-        configconn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data
             FROM {table}
             WHERE key = :key AND (expires IS NULL OR expires >= CURRENT_DATE)
         """.format(table=permalinks_table))
         try:
-            data = json.loads(configconn.execute(sql, {"key": key}).mappings().first()["data"])
+            with db_engine.connect() as connection:
+                data = json.loads(connection.execute(sql, {"key": key}).mappings().first()["data"])
         except:
             pass
         return jsonify(data)
@@ -172,14 +171,15 @@ class UserPermalink(Resource):
         if not username:
             return jsonify({})
 
-        configconn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data
             FROM {table}
             WHERE username = :user
         """.format(table=user_permalink_table))
         try:
-            data = json.loads(configconn.execute(sql, {"user": username}).mappings().first()["data"])
+            with db_engine.connect() as connection:
+                data = json.loads(connection.execute(sql, {"user": username}).mappings().first()["data"])
         except:
             data = {}
         return jsonify(data)
@@ -213,7 +213,7 @@ class UserPermalink(Resource):
         }
 
         # Insert into databse
-        conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
         sql = sql_text("""
@@ -225,9 +225,8 @@ class UserPermalink(Resource):
             SET data = :data, date = :date
         """.format(table=user_permalink_table))
 
-        conn.execute(sql, {"user": username, "data": datastr, "date": date})
-        conn.commit()
-        conn.close()
+        with db_engine.begin() as connection:
+            connection.execute(sql, {"user": username, "data": datastr, "date": date})
 
         return jsonify({"success": True})
 
@@ -244,7 +243,7 @@ class UserBookmarksList(Resource):
         config = config_handler.tenant_config(tenant)
         sort_order = config.get('bookmarks_sort_order', 'date, description')
 
-        conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
             FROM {table}
@@ -252,14 +251,15 @@ class UserBookmarksList(Resource):
         """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
-            result = conn.execute(sql, {"user": username}).mappings()
-            for row in result:
-                bookmark = {}
-                bookmark['data'] = json.loads(row.data)
-                bookmark['key'] = row.key
-                bookmark['description'] = row.description
-                bookmark['date'] = row.date
-                data.append(bookmark)
+            with db_engine.connect() as connection:
+                result = connection.execute(sql, {"user": username}).mappings()
+                for row in result:
+                    bookmark = {}
+                    bookmark['data'] = json.loads(row.data)
+                    bookmark['key'] = row.key
+                    bookmark['description'] = row.description
+                    bookmark['date'] = row.date
+                    data.append(bookmark)
         except:
             data = []
         return jsonify(data)
@@ -294,7 +294,7 @@ class UserBookmarksList(Resource):
         }
 
         # Insert into database
-        conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
@@ -312,15 +312,13 @@ class UserBookmarksList(Resource):
         attempts = 0
         while attempts < 100:
             try:
-                conn.execute(sql, {"user": username, "data": datastr, "key": hexdigest, "date": date, "description": description})
-                break
+                with db_engine.begin() as connection:
+                    connection.execute(sql, {"user": username, "data": datastr, "key": hexdigest, "date": date, "description": description})
+                    break
             except:
                 pass
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
-        
-        conn.commit()
-        conn.close()
 
         return jsonify({"success": attempts < 100})
 
@@ -333,14 +331,15 @@ class UserBookmark(Resource):
         if not username:
             return jsonify({"success": False})
 
-        conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data
             FROM {table}
             WHERE username = :user and key = :key
         """.format(table=user_bookmark_table))
         try:
-            data = json.loads(conn.execute(sql, {"user": username, "key": key}).mappings().first()["data"])
+            with db_engine.connect() as connection:
+                data = json.loads(connection.execute(sql, {"user": username, "key": key}).mappings().first()["data"])
         except:
             data = {}
         return jsonify(data)
@@ -353,15 +352,14 @@ class UserBookmark(Resource):
             return jsonify({"success": False})
         
         # Delete into databse
-        conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             DELETE FROM {table}
             WHERE key = :key and username = :username
         """.format(table=user_bookmark_table))
 
-        conn.execute(sql, {"key": key, "username": username})
-        conn.commit()
-        conn.close()
+        with db_engine.begin() as connection:
+            connection.execute(sql, {"key": key, "username": username})
 
         return jsonify({"success": True})
 
@@ -395,7 +393,7 @@ class UserBookmark(Resource):
         }
 
         # Update into databse
-        conn, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
@@ -406,9 +404,8 @@ class UserBookmark(Resource):
             WHERE username = :user and key = :key
         """.format(table=user_bookmark_table))
 
-        conn.execute(sql, {"user": username, "data": datastr, "key": key, "date": date, "description": description})
-        conn.commit()
-        conn.close()
+        with db_engine.begin() as connection:
+            connection.execute(sql, {"user": username, "data": datastr, "key": key, "date": date, "description": description})
 
         return jsonify({"success": True})
 
@@ -422,7 +419,9 @@ def ready():
 @app.route("/healthz", methods=['GET'])
 def healthz():
     try:
-        db_conn()
+        db_engine, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        with db_engine.connect() as connection:
+            connection.execute(sql_text("SELECT 1"))
     except Exception as e:
         return make_response(jsonify(
             {"status": "FAIL", "cause":
