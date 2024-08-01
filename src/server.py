@@ -16,8 +16,6 @@ from qwc_services_core.tenant_handler import TenantHandler
 from qwc_services_core.runtime_config import RuntimeConfig
 
 
-qwc_config_schema = os.getenv("QWC_CONFIG_SCHEMA", "qwc_config")
-
 # Flask application
 app = Flask(__name__)
 api = Api(app, version='1.0', title='Permalink API',
@@ -53,6 +51,8 @@ def db_conn():
     config = config_handler.tenant_config(tenant)
 
     db_url = config.get('db_url', 'postgresql:///?service=qwc_configdb')
+    qwc_config_schema = config.get('qwc_config_schema', 'qwc_config')
+
     permalinks_table = config.get('permalinks_table', qwc_config_schema + '.permalinks')
     user_permalink_table = config.get(
         'user_permalink_table', qwc_config_schema + '.user_permalinks')
