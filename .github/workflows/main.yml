@@ -23,7 +23,7 @@ jobs:
           sed -i 's|host=qwc-postgis|host=localhost|g' ~/.pg_service.conf
           sed -i 's|port=5432|port=5439|g' ~/.pg_service.conf
           sed -Ei "s|^(\s*POSTGRES_PASSWORD:).*$|\1 'waej7WuoOoth0wor'|" docker-compose-example.yml
-          docker-compose -f docker-compose-example.yml up -d qwc-postgis qwc-config-db-migrate
+          docker compose -f docker-compose-example.yml up -d qwc-postgis qwc-config-db-migrate
 
       - name: Setting up Python
         uses: actions/setup-python@v5
