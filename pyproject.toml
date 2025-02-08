@@ -11,7 +11,7 @@ dependencies = [
     "flask-restx~=1.3.0",
     "psycopg2~=2.9.9",
     "SQLAlchemy~=2.0.29",
-    "qwc-services-core~=1.3.34"
+    "qwc-services-core~=1.4.0"
 ]
 
 [dependency-groups]
