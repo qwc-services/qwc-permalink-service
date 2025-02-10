@@ -318,7 +318,7 @@ wheels = [
 
 [[package]]
 name = "qwc-permalink-service"
-version = "2025.2.9"
+version = "2025.2.10"
 source = { virtual = "." }
 dependencies = [
     { name = "flask" },
