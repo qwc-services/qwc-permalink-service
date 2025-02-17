@@ -47,6 +47,10 @@
         "default_expiry_period": {
           "description": "Default expiry period for permalinks, in days. Default: null (no expiry)",
           "type": "number"
+        },
+        "store_bookmarks_by_userid": {
+          "description": "Whether to store bookmarks by userid instead of username. Default: true",
+          "type": "boolean"
         }
       },
       "required": [
