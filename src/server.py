@@ -60,9 +60,14 @@ def db_conn():
     user_permalink_table = config.get(
         'user_permalink_table', qwc_config_schema + '.user_permalinks')
     user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+    store_bookmarks_by_userid = config.get('store_bookmarks_by_userid', True)
+    if store_bookmarks_by_userid:
+        users_table = f'"{qwc_config_schema}"."users"'
+    else:
+        users_table = None
 
     db = db_engine.db_engine(db_url)
-    return (db, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table)
+    return (db, users_table, permalinks_table, user_permalink_table, user_bookmark_table)
 
 
 @api.route('/createpermalink')
@@ -99,7 +104,7 @@ class CreatePermalink(Resource):
         }
 
         # Insert into databse
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
@@ -153,7 +158,7 @@ class ResolvePermalink(Resource):
         args = resolvepermalink_parser.parse_args()
         key = args['key']
         data = {}
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data
             FROM {table}
@@ -176,7 +181,7 @@ class UserPermalink(Resource):
         if not username:
             return jsonify({})
 
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
             SELECT data
             FROM {table}
@@ -218,7 +223,7 @@ class UserPermalink(Resource):
         }
 
         # Insert into databse
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
         sql = sql_text("""
@@ -248,16 +253,23 @@ class UserBookmarksList(Resource):
         config = config_handler.tenant_config(tenant)
         sort_order = config.get('bookmarks_sort_order', 'date, description')
 
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
-        sql = sql_text("""
-            WITH "user" AS (
-                SELECT id FROM "{schema}"."users" WHERE name=:username
-            )
-            SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
-            FROM {table}
-            WHERE user_id = (SELECT id FROM "user")
-            ORDER BY {sort_order}
-        """.format(schema=qwc_config_schema, table=user_bookmark_table, sort_order=sort_order))
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        if users_table:
+            sql = sql_text("""
+                WITH "user" AS (
+                    SELECT id FROM {users_table} WHERE name=:username
+                )
+                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
+                FROM {table}
+                WHERE user_id = (SELECT id FROM "user")
+                ORDER BY {sort_order}
+            """.format(users_table=users_table, table=user_bookmark_table, sort_order=sort_order))
+        else:
+            sql = sql_text("""
+                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
+                FROM {table}
+                WHERE username = :user ORDER BY {sort_order}
+            """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
             with db_engine.connect() as connection:
@@ -303,19 +315,29 @@ class UserBookmarksList(Resource):
         }
 
         # Insert into database
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
         description = args['description']
-        sql = sql_text("""
-            WITH "user" AS (
-                SELECT id FROM "{schema}"."users" WHERE name=:username
-            )
-            INSERT INTO {table} (user_id, username, data, key, date, description)
-            VALUES ((SELECT id FROM "user"), :username, :data, :key, :date, :description)
-        """.format(schema=qwc_config_schema, table=user_bookmark_table))
+        if users_table:
+            sql = sql_text("""
+                WITH "user" AS (
+                    SELECT id FROM {users_table} WHERE name=:username
+                )
+                INSERT INTO {table} (user_id, username, data, key, date, description)
+                VALUES ((SELECT id FROM "user"), :username, :data, :key, :date, :description)
+            """.format(users_table=users_table, table=user_bookmark_table))
+        else:
+            sql = sql_text("""
+                INSERT INTO {table} (username, data, key, date, description)
+                VALUES (:user, :data, :key, :date, :description)
+                ON CONFLICT (username,key) WHERE username = :user
+                DO
+                UPDATE
+                SET data = :data, date = :date, description = :description
+            """.format(table=user_bookmark_table))
 
         attempts = 0
         while attempts < 100:
@@ -339,15 +361,22 @@ class UserBookmark(Resource):
         if not username:
             return jsonify({"success": False})
 
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
-        sql = sql_text("""
-            WITH "user" AS (
-                SELECT id FROM "{schema}"."users" WHERE name=:username
-            )
-            SELECT data
-            FROM {table}
-            WHERE user_id = (SELECT id FROM "user") AND key = :key
-        """.format(schema=qwc_config_schema, table=user_bookmark_table))
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        if users_table:
+            sql = sql_text("""
+                WITH "user" AS (
+                    SELECT id FROM {users_table} WHERE name=:username
+                )
+                SELECT data
+                FROM {table}
+                WHERE user_id = (SELECT id FROM "user") AND key = :key
+            """.format(users_table=users_table, table=user_bookmark_table))
+        else:
+            sql = sql_text("""
+                SELECT data
+                FROM {table}
+                WHERE username = :user and key = :key
+            """.format(table=user_bookmark_table))
         try:
             with db_engine.connect() as connection:
                 data = json.loads(connection.execute(sql, {"username": username, "key": key}).mappings().first()["data"])
@@ -364,14 +393,20 @@ class UserBookmark(Resource):
             return jsonify({"success": False})
         
         # Delete into databse
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
-        sql = sql_text("""
-            WITH "user" AS (
-                SELECT id FROM "{schema}"."users" WHERE name=:username
-            )
-            DELETE FROM {table}
-            WHERE key = :key and user_id = (SELECT id FROM "user")
-        """.format(schema=qwc_config_schema, table=user_bookmark_table))
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        if users_table:
+            sql = sql_text("""
+                WITH "user" AS (
+                    SELECT id FROM {users_table} WHERE name=:username
+                )
+                DELETE FROM {table}
+                WHERE key = :key and user_id = (SELECT id FROM "user")
+            """.format(users_table=users_table, table=user_bookmark_table))
+        else:
+            sql = sql_text("""
+                DELETE FROM {table}
+                WHERE key = :key and username = :username
+            """.format(table=user_bookmark_table))
 
         with db_engine.begin() as connection:
             connection.execute(sql, {"key": key, "username": username})
@@ -408,19 +443,26 @@ class UserBookmark(Resource):
         }
 
         # Update into databse
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
         description = args['description']
-        sql = sql_text("""
-            WITH "user" AS (
-                SELECT id FROM "{schema}"."users" WHERE name=:username
-            )
-            UPDATE {table}
-            SET username = :username, data = :data, date = :date, description = :description
-            WHERE user_id = (SELECT id FROM "user") and key = :key
-        """.format(schema=qwc_config_schema, table=user_bookmark_table))
+        if users_table:
+            sql = sql_text("""
+                WITH "user" AS (
+                    SELECT id FROM {users_table} WHERE name=:username
+                )
+                UPDATE {table}
+                SET username = :username, data = :data, date = :date, description = :description
+                WHERE user_id = (SELECT id FROM "user") and key = :key
+            """.format(users_table=users_table, table=user_bookmark_table))
+        else:
+            sql = sql_text("""
+                UPDATE {table}
+                SET data = :data, date = :date, description = :description
+                WHERE username = :user and key = :key
+            """.format(table=user_bookmark_table))
 
         with db_engine.begin() as connection:
             connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description})
@@ -437,7 +479,7 @@ def ready():
 @app.route("/healthz", methods=['GET'])
 def healthz():
     try:
-        db_engine, qwc_config_schema, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         with db_engine.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
     except Exception as e:
