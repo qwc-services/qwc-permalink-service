@@ -268,7 +268,7 @@ class UserBookmarksList(Resource):
             sql = sql_text("""
                 SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
                 FROM {table}
-                WHERE username = :user ORDER BY {sort_order}
+                WHERE username = :username ORDER BY {sort_order}
             """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
@@ -375,7 +375,7 @@ class UserBookmark(Resource):
             sql = sql_text("""
                 SELECT data
                 FROM {table}
-                WHERE username = :user and key = :key
+                WHERE username = :username and key = :key
             """.format(table=user_bookmark_table))
         try:
             with db_engine.connect() as connection:
@@ -461,7 +461,7 @@ class UserBookmark(Resource):
             sql = sql_text("""
                 UPDATE {table}
                 SET data = :data, date = :date, description = :description
-                WHERE username = :user and key = :key
+                WHERE username = :username and key = :key
             """.format(table=user_bookmark_table))
 
         with db_engine.begin() as connection:
