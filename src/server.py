@@ -332,8 +332,8 @@ class UserBookmarksList(Resource):
         else:
             sql = sql_text("""
                 INSERT INTO {table} (username, data, key, date, description)
-                VALUES (:user, :data, :key, :date, :description)
-                ON CONFLICT (username,key) WHERE username = :user
+                VALUES (:username, :data, :key, :date, :description)
+                ON CONFLICT (username,key) WHERE username = :username
                 DO
                 UPDATE
                 SET data = :data, date = :date, description = :description
