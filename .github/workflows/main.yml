@@ -23,6 +23,11 @@ jobs:
           sed -i 's|host=qwc-postgis|host=localhost|g' ~/.pg_service.conf
           sed -i 's|port=5432|port=5439|g' ~/.pg_service.conf
           sed -Ei "s|^(\s*POSTGRES_PASSWORD:).*$|\1 'waej7WuoOoth0wor'|" docker-compose-example.yml
+          if [ ${{ endsWith(github.ref, '-lts') }} = true ]; then
+            sed -Ei "s|:latest\S+|:latest-${GITHUB_REF:11:4}-lts|g" docker-compose-example.yml
+          else
+            sed -Ei "s|:latest\S+|:latest|g" docker-compose-example.yml
+          fi
           docker compose -f docker-compose-example.yml up -d qwc-postgis qwc-config-db-migrate
 
       - name: Setting up Python
