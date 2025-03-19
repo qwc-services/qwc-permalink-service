@@ -11,6 +11,7 @@ from sqlalchemy.sql import text as sql_text
 from qwc_services_core.auth import auth_manager, optional_auth, get_identity, get_username
 from qwc_services_core.api import CaseInsensitiveArgument
 from qwc_services_core.database import DatabaseEngine
+from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.tenant_handler import (
     TenantHandler, TenantPrefixMiddleware, TenantSessionInterface)
 from qwc_services_core.runtime_config import RuntimeConfig
@@ -41,6 +42,7 @@ db_engine = DatabaseEngine()
 # request parser
 createpermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
 createpermalink_parser.add_argument('url', required=False)
+createpermalink_parser.add_argument('permitted_group', required=False)
 
 resolvepermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
 resolvepermalink_parser.add_argument('key', required=True)
@@ -75,6 +77,7 @@ class CreatePermalink(Resource):
 
     @api.doc('createpermalink')
     @api.param('url', 'The URL for which to generate a permalink', 'query')
+    @api.param('permitted_group', 'Optional, group to which to restrict the permalink', 'query')
     @api.param('payload', 'A json document with the state to store in the permalink', 'body')
     @api.expect(createpermalink_parser)
     @optional_auth
@@ -102,6 +105,7 @@ class CreatePermalink(Resource):
             "query": query,
             "state": state
         }
+        permitted_group = args.get('permitted_group', None)
 
         # Insert into databse
         db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
@@ -114,15 +118,15 @@ class CreatePermalink(Resource):
             expires = (datetime.date.today() + delta).strftime(r"%Y-%m-%d")
 
         sql = sql_text("""
-            INSERT INTO {table} (key, data, date, expires)
-            VALUES (:key, :data, :date, :expires)
+            INSERT INTO {table} (key, data, date, expires, permitted_group)
+            VALUES (:key, :data, :date, :expires, :permitted_group)
         """.format(table=permalinks_table))
 
         attempts = 0
         while attempts < 100:
             try:
                 with db_engine.begin() as connection:
-                    connection.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires})
+                    connection.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires, "permitted_group": permitted_group})
                 break
             except:
                 pass
@@ -158,17 +162,29 @@ class ResolvePermalink(Resource):
         args = resolvepermalink_parser.parse_args()
         key = args['key']
         data = {}
+        permitted_group = None
         db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         sql = sql_text("""
-            SELECT data
+            SELECT data, permitted_group
             FROM {table}
             WHERE key = :key AND (expires IS NULL OR expires >= CURRENT_DATE)
         """.format(table=permalinks_table))
         try:
             with db_engine.connect() as connection:
-                data = json.loads(connection.execute(sql, {"key": key}).mappings().first()["data"])
+                result = connection.execute(sql, {"key": key}).mappings().first()
+                data = json.loads(result["data"])
+                permitted_group = result["permitted_group"]
         except:
             pass
+        if permitted_group:
+            app.logger.debug("Permalink %s is restricted to group %s" % (key, permitted_group))
+            username = get_username(get_identity())
+            tenant = tenant_handler.tenant()
+            reader = PermissionsReader(tenant, app.logger)
+            groups = reader.permissions['user_groups'].get(username, [])
+            if permitted_group not in groups:
+                app.logger.debug("User %s is not in group %s, returning empty response" % (username, permitted_group))
+                return jsonify({})
         return jsonify(data)
 
 
