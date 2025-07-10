@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, make_response
 from flask_restx import Api, Resource, reqparse
 import datetime
 import hashlib
+import os
 import random
 import json
 import time
@@ -71,6 +72,7 @@ def db_conn():
     db = db_engine.db_engine(db_url)
     return (db, users_table, permalinks_table, user_permalink_table, user_bookmark_table)
 
+ALLOW_PUBLIC_BOOKMARKS = os.environ.get("ALLOW_PUBLIC_BOOKMARKS", "False").lower() == "true"
 
 @api.route('/createpermalink')
 class CreatePermalink(Resource):
@@ -263,7 +265,10 @@ class UserBookmarksList(Resource):
     def get(self):
         username = get_username(get_identity())
         if not username:
-            return jsonify([])
+            if ALLOW_PUBLIC_BOOKMARKS:
+                username = "public"
+            else:
+                return jsonify([])
 
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
@@ -310,7 +315,10 @@ class UserBookmarksList(Resource):
     def post(self):
         username = get_username(get_identity())
         if not username:
-            return jsonify({"success": False})
+            if ALLOW_PUBLIC_BOOKMARKS:
+                username = "public"
+            else:
+                return jsonify({"success": False})
         
         args = userbookmark_parser.parse_args()
         state = request.json
@@ -375,7 +383,10 @@ class UserBookmark(Resource):
     def get(self, key):
         username = get_username(get_identity())
         if not username:
-            return jsonify({"success": False})
+            if ALLOW_PUBLIC_BOOKMARKS:
+                username = "public"
+            else:
+                return jsonify({"success": False})
 
         db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         if users_table:
@@ -406,7 +417,10 @@ class UserBookmark(Resource):
     def delete(self, key):
         username = get_username(get_identity())
         if not username:
-            return jsonify({"success": False})
+            if ALLOW_PUBLIC_BOOKMARKS:
+                username = "public"
+            else:
+                return jsonify({"success": False})
         
         # Delete into databse
         db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
@@ -438,7 +452,10 @@ class UserBookmark(Resource):
     def put(self, key):
         username = get_username(get_identity())
         if not username:
-            return jsonify({"success": False})
+            if ALLOW_PUBLIC_BOOKMARKS:
+                username = "public"
+            else:
+                return jsonify({"success": False})
         
         args = userbookmark_parser.parse_args()
         state = request.json
