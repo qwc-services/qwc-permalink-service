@@ -27,7 +27,7 @@ Example:
   "config": {
     "db_url": "postgresql:///?service=qwc_configdb",
     "permalinks_table": "qwc_config.permalinks",
-    "user_permalink_table": "qwc_config.user_permalinks"
+    "user_bookmark_table": "qwc_config.user_bookmarks"
   }
 }
 ```
@@ -40,11 +40,12 @@ Config options in the config file can be overridden by equivalent uppercase envi
 |------------------------|---------------------------------------|-----------------------|
 | `DB_URL`               | `postgresql:///?service=qwc_configdb` | DB connection URL [1] |
 | `PERMALINKS_TABLE`     | `qwc_config.permalinks`               | Permalink table       |
-| `USER_PERMALINK_TABLE` | `qwc_config.user_permalinks`          | User permalink table  |
+| `USER_BOOKMARK_TABLE`  | `qwc_config.user_bookmarks`           | User bookmarks table  |
 
 [1] https://docs.sqlalchemy.org/en/13/core/engines.html#postgresql
 
-If you don't use `qwc-config-db` you have to create the tables for storing permalinks first.
+If you don't use `qwc-config-db` you have to create the tables first.
+
 Example:
 
     CREATE TABLE permalinks
@@ -55,6 +56,13 @@ Example:
       expires date
     );
 
+      CREATE TABLE user_bookmarks (
+          username character varying NOT NULL PRIMARY KEY,
+          data text,
+          key varchar(10),
+          date date,
+          description text
+      );
 
 Usage
 -----
