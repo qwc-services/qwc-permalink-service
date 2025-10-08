@@ -318,6 +318,7 @@ class UserBookmarksList(Resource):
             if ALLOW_PUBLIC_BOOKMARKS:
                 username = "public"
             else:
+                app.logger.debug("Rejecting attempt to store bookmark as public user")
                 return jsonify({"success": False})
         
         args = userbookmark_parser.parse_args()
@@ -374,6 +375,8 @@ class UserBookmarksList(Resource):
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
 
+        if attempts >= 100:
+            app.logger.debug("More than 100 failed attempts to store bookmark")
         return jsonify({"success": attempts < 100})
 
 @bk.route('/<key>')
