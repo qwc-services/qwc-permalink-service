@@ -52,25 +52,21 @@ userbookmark_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgum
 userbookmark_parser.add_argument('url', required=False)
 userbookmark_parser.add_argument('description')
 
-def db_conn():
+def db_conn(config):
     tenant = tenant_handler.tenant()
     config = config_handler.tenant_config(tenant)
 
     db_url = config.get('db_url', 'postgresql:///?service=qwc_configdb')
     qwc_config_schema = config.get('qwc_config_schema', 'qwc_config')
+    db = db_engine.db_engine(db_url)
 
-    permalinks_table = config.get('permalinks_table', qwc_config_schema + '.permalinks')
-    user_permalink_table = config.get(
-        'user_permalink_table', qwc_config_schema + '.user_permalinks')
-    user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
     store_bookmarks_by_userid = config.get('store_bookmarks_by_userid', True)
     if store_bookmarks_by_userid:
         users_table = f'"{qwc_config_schema}"."users"'
     else:
         users_table = None
 
-    db = db_engine.db_engine(db_url)
-    return (db, users_table, permalinks_table, user_permalink_table, user_bookmark_table)
+    return db, qwc_config_schema, users_table
 
 ALLOW_PUBLIC_BOOKMARKS = os.environ.get("ALLOW_PUBLIC_BOOKMARKS", "False").lower() == "true"
 
@@ -85,10 +81,11 @@ class CreatePermalink(Resource):
     @optional_auth
     def post(self):
         args = createpermalink_parser.parse_args()
-
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
-        self.default_expiry_period = config.get('default_expiry_period', None)
+        db, qwc_config_schema, users_table = db_conn(config)
+        permalinks_table = config.get('permalinks_table', qwc_config_schema + '.permalinks')
+        default_expiry_period = config.get('default_expiry_period', None)
 
         state = request.json
         if "url" in state:
@@ -109,14 +106,13 @@ class CreatePermalink(Resource):
         }
         permitted_group = args.get('permitted_group', None)
 
-        # Insert into databse
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        # Insert into database
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
         expires = None
-        if self.default_expiry_period:
-            delta = datetime.timedelta(days=self.default_expiry_period)
+        if default_expiry_period:
+            delta = datetime.timedelta(days=default_expiry_period)
             expires = (datetime.date.today() + delta).strftime(r"%Y-%m-%d")
 
         sql = sql_text("""
@@ -127,7 +123,7 @@ class CreatePermalink(Resource):
         attempts = 0
         while attempts < 100:
             try:
-                with db_engine.begin() as connection:
+                with db.begin() as connection:
                     connection.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires, "permitted_group": permitted_group})
                 break
             except:
@@ -140,7 +136,7 @@ class CreatePermalink(Resource):
             DELETE FROM {table}
             WHERE expires < CURRENT_DATE
         """.format(table=permalinks_table))
-        with db_engine.begin() as connection:
+        with db.begin() as connection:
             connection.execute(sql)
 
         # Return
@@ -162,17 +158,22 @@ class ResolvePermalink(Resource):
     @optional_auth
     def get(self):
         args = resolvepermalink_parser.parse_args()
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        permalinks_table = config.get('permalinks_table', qwc_config_schema + '.permalinks')
+
         key = args['key']
         data = {}
         permitted_group = None
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+
         sql = sql_text("""
             SELECT data, permitted_group
             FROM {table}
             WHERE key = :key AND (expires IS NULL OR expires >= CURRENT_DATE)
         """.format(table=permalinks_table))
         try:
-            with db_engine.connect() as connection:
+            with db.connect() as connection:
                 result = connection.execute(sql, {"key": key}).mappings().first()
                 data = json.loads(result["data"])
                 permitted_group = result["permitted_group"]
@@ -199,14 +200,18 @@ class UserPermalink(Resource):
         if not username:
             return jsonify({})
 
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_permalink_table = config.get('user_permalink_table', qwc_config_schema + '.user_permalinks')
+
         sql = sql_text("""
             SELECT data
             FROM {table}
             WHERE username = :user
         """.format(table=user_permalink_table))
         try:
-            with db_engine.connect() as connection:
+            with db.connect() as connection:
                 data = json.loads(connection.execute(sql, {"user": username}).mappings().first()["data"])
         except:
             data = {}
@@ -221,6 +226,11 @@ class UserPermalink(Resource):
         username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
+
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_permalink_table = config.get('user_permalink_table', qwc_config_schema + '.user_permalinks')
 
         args = createpermalink_parser.parse_args()
         state = request.json
@@ -241,7 +251,6 @@ class UserPermalink(Resource):
         }
 
         # Insert into databse
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
         sql = sql_text("""
@@ -272,9 +281,10 @@ class UserBookmarksList(Resource):
 
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
         sort_order = config.get('bookmarks_sort_order', 'date, description')
 
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         if users_table:
             sql = sql_text("""
                 WITH "user" AS (
@@ -293,7 +303,7 @@ class UserBookmarksList(Resource):
             """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
-            with db_engine.connect() as connection:
+            with db.connect() as connection:
                 result = connection.execute(sql, {"username": username}).mappings()
                 for row in result:
                     bookmark = {}
@@ -320,6 +330,11 @@ class UserBookmarksList(Resource):
             else:
                 app.logger.debug("Rejecting attempt to store bookmark as public user")
                 return jsonify({"success": False})
+
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
         
         args = userbookmark_parser.parse_args()
         state = request.json
@@ -340,7 +355,6 @@ class UserBookmarksList(Resource):
         }
 
         # Insert into database
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         hexdigest = hashlib.sha224((datastr + str(time.time())).encode('utf-8')).hexdigest()[0:9]
         date = datetime.date.today().strftime(r"%Y-%m-%d")
@@ -367,7 +381,7 @@ class UserBookmarksList(Resource):
         attempts = 0
         while attempts < 100:
             try:
-                with db_engine.begin() as connection:
+                with db.begin() as connection:
                     connection.execute(sql, {"username": username, "data": datastr, "key": hexdigest, "date": date, "description": description})
                     break
             except:
@@ -391,7 +405,12 @@ class UserBookmark(Resource):
             else:
                 return jsonify({"success": False})
 
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
+
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+
         if users_table:
             sql = sql_text("""
                 WITH "user" AS (
@@ -408,7 +427,7 @@ class UserBookmark(Resource):
                 WHERE username = :username and key = :key
             """.format(table=user_bookmark_table))
         try:
-            with db_engine.connect() as connection:
+            with db.connect() as connection:
                 data = json.loads(connection.execute(sql, {"username": username, "key": key}).mappings().first()["data"])
         except Exception as e:
             print(e)
@@ -425,8 +444,12 @@ class UserBookmark(Resource):
             else:
                 return jsonify({"success": False})
         
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+
         # Delete into databse
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         if users_table:
             sql = sql_text("""
                 WITH "user" AS (
@@ -460,6 +483,11 @@ class UserBookmark(Resource):
             else:
                 return jsonify({"success": False})
         
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+
         args = userbookmark_parser.parse_args()
         state = request.json
         if "url" in state:
@@ -479,7 +507,6 @@ class UserBookmark(Resource):
         }
 
         # Update into databse
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
@@ -500,7 +527,7 @@ class UserBookmark(Resource):
                 WHERE username = :username and key = :key
             """.format(table=user_bookmark_table))
 
-        with db_engine.begin() as connection:
+        with db.begin() as connection:
             connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description})
 
         return jsonify({"success": True})
@@ -515,13 +542,12 @@ def ready():
 @app.route("/healthz", methods=['GET'])
 def healthz():
     try:
-        db_engine, users_table, permalinks_table, user_permalink_table, user_bookmark_table = db_conn()
-        with db_engine.connect() as connection:
+        db, qwc_config_schema, users_table = db_conn(config)
+        with db.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
     except Exception as e:
         return make_response(jsonify(
-            {"status": "FAIL", "cause":
-                str(e)}), 500)
+            {"status": "FAIL", "cause": str(e)}), 500)
 
     return jsonify({"status": "OK"})
 
