@@ -24,8 +24,6 @@ api = Api(app, version='1.0', title='Permalink API',
           description='API for QWC Permalink service',
           default_label='Permalink operations', doc='/api/')
 
-bk = api.namespace('bookmarks', description='Bookmarks operations')
-
 # disable verbose 404 error message
 app.config['ERROR_404_HELP'] = False
 
@@ -262,14 +260,15 @@ class UserPermalink(Resource):
             SET data = :data, date = :date
         """.format(table=user_permalink_table))
 
-        with db_engine.begin() as connection:
+        with db.begin() as connection:
             connection.execute(sql, {"user": username, "data": datastr, "date": date})
 
         return jsonify({"success": True})
 
-@bk.route('/')
+@api.route("/bookmarks/")
+@api.route("/visibility_presets/")
 class UserBookmarksList(Resource):
-    @bk.doc('getbookmarks')
+    @api.doc('getbookmarks')
     @optional_auth
     def get(self):
         username = get_username(get_identity())
@@ -279,10 +278,15 @@ class UserBookmarksList(Resource):
             else:
                 return jsonify([])
 
+        endpoint = request.path.split("/")[1]
+
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
         db, qwc_config_schema, users_table = db_conn(config)
-        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        if endpoint == "bookmarks":
+            user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        else:
+            user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
         sort_order = config.get('bookmarks_sort_order', 'date, description')
 
         if users_table:
@@ -316,11 +320,11 @@ class UserBookmarksList(Resource):
             data = []
         return jsonify(data)
 
-    @bk.doc('addbookmark')
-    @bk.param('url', 'The URL for which to generate a bookmark', 'query')
-    @bk.param('payload', 'A json document with the state to store in the bookmark', 'body')
-    @bk.param('description', 'Description to store in the bookmark', 'query')
-    @bk.expect(userbookmark_parser)    
+    @api.doc('addbookmark')
+    @api.param('url', 'The URL for which to generate a bookmark', 'query')
+    @api.param('payload', 'A json document with the state to store in the bookmark', 'body')
+    @api.param('description', 'Description to store in the bookmark', 'query')
+    @api.expect(userbookmark_parser)
     @optional_auth
     def post(self):
         username = get_username(get_identity())
@@ -331,28 +335,36 @@ class UserBookmarksList(Resource):
                 app.logger.debug("Rejecting attempt to store bookmark as public user")
                 return jsonify({"success": False})
 
+        endpoint = request.path.split("/")[1]
+
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
         db, qwc_config_schema, users_table = db_conn(config)
-        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        if endpoint == "bookmarks":
+            user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        else:
+            user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
         
         args = userbookmark_parser.parse_args()
-        state = request.json
-        if "url" in state:
-            url = state["url"]
-            del state["url"]
-        elif "url" in args:
-            url = args['url']
+        if endpoint == "bookmarks":
+            state = request.json
+            if "url" in state:
+                url = state["url"]
+                del state["url"]
+            elif "url" in args:
+                url = args['url']
+            else:
+                api.abort(400, "No URL specified")
+            parts = urlparse(url)
+            query = parse_qs(parts.query, keep_blank_values=True)
+            for key in query:
+                query[key] = query[key][0]
+            data = {
+                "query": query,
+                "state": state
+            }
         else:
-            api.abort(400, "No URL specified")
-        parts = urlparse(url)
-        query = parse_qs(parts.query, keep_blank_values=True)
-        for key in query:
-            query[key] = query[key][0]
-        data = {
-            "query": query,
-            "state": state
-        }
+            data = request.json
 
         # Insert into database
         datastr = json.dumps(data)
@@ -393,9 +405,10 @@ class UserBookmarksList(Resource):
             app.logger.debug("More than 100 failed attempts to store bookmark")
         return jsonify({"success": attempts < 100})
 
-@bk.route('/<key>')
+@api.route("/bookmarks/<key>")
+@api.route("/visibility_presets/<key>")
 class UserBookmark(Resource):
-    @bk.doc('getbookmark')
+    @api.doc('getbookmark')
     @optional_auth
     def get(self, key):
         username = get_username(get_identity())
@@ -405,11 +418,15 @@ class UserBookmark(Resource):
             else:
                 return jsonify({"success": False})
 
+        endpoint = request.path.split("/")[1]
 
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
         db, qwc_config_schema, users_table = db_conn(config)
-        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        if endpoint == "bookmarks":
+            user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        else:
+            user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
 
         if users_table:
             sql = sql_text("""
@@ -434,7 +451,7 @@ class UserBookmark(Resource):
             data = {}
         return jsonify(data)
 
-    @bk.doc('deletebookmark')
+    @api.doc('deletebookmark')
     @optional_auth
     def delete(self, key):
         username = get_username(get_identity())
@@ -444,10 +461,15 @@ class UserBookmark(Resource):
             else:
                 return jsonify({"success": False})
         
+        endpoint = request.path.split("/")[1]
+
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
         db, qwc_config_schema, users_table = db_conn(config)
-        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        if endpoint == "bookmarks":
+            user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        else:
+            user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
 
         # Delete into databse
         if users_table:
@@ -464,16 +486,16 @@ class UserBookmark(Resource):
                 WHERE key = :key and username = :username
             """.format(table=user_bookmark_table))
 
-        with db_engine.begin() as connection:
+        with db.begin() as connection:
             connection.execute(sql, {"key": key, "username": username})
 
         return jsonify({"success": True})
 
-    @bk.doc('setbookmark')
-    @bk.param('url', 'The URL for which to generate a bookmark', 'query')
-    @bk.param('payload', 'A json document with the state to store in the bookmark', 'body')
-    @bk.param('description', 'Description to store in the bookmark', 'query')
-    @bk.expect(userbookmark_parser)    
+    @api.doc('setbookmark')
+    @api.param('url', 'The URL for which to generate a bookmark', 'query')
+    @api.param('payload', 'A json document with the state to store in the bookmark', 'body')
+    @api.param('description', 'Description to store in the bookmark', 'query')
+    @api.expect(userbookmark_parser)
     @optional_auth
     def put(self, key):
         username = get_username(get_identity())
@@ -482,29 +504,37 @@ class UserBookmark(Resource):
                 username = "public"
             else:
                 return jsonify({"success": False})
+
+        endpoint = request.path.split("/")[1]
         
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
         db, qwc_config_schema, users_table = db_conn(config)
-        user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        if endpoint == "bookmarks":
+            user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        else:
+            user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
 
         args = userbookmark_parser.parse_args()
-        state = request.json
-        if "url" in state:
-            url = state["url"]
-            del state["url"]
-        elif "url" in args:
-            url = args['url']
+        if endpoint == "bookmarks":
+            state = request.json
+            if "url" in state:
+                url = state["url"]
+                del state["url"]
+            elif "url" in args:
+                url = args['url']
+            else:
+                api.abort(400, "No URL specified")
+            parts = urlparse(url)
+            query = parse_qs(parts.query, keep_blank_values=True)
+            for k in query:
+                query[k] = query[k][0]
+            data = {
+                "query": query,
+                "state": state
+            }
         else:
-            api.abort(400, "No URL specified")
-        parts = urlparse(url)
-        query = parse_qs(parts.query, keep_blank_values=True)
-        for k in query:
-            query[k] = query[k][0]
-        data = {
-            "query": query,
-            "state": state
-        }
+            data = request.json
 
         # Update into databse
         datastr = json.dumps(data)
