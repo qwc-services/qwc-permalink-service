@@ -402,7 +402,8 @@ class UserBookmarksList(Resource):
 
         if attempts >= 100:
             app.logger.debug("More than 100 failed attempts to store bookmark")
-        return jsonify({"success": attempts < 100})
+        success = attempts < 100
+        return jsonify({"success": success, "key": hexdigest if success else None})
 
 @api.route("/bookmarks/<key>")
 @api.route("/visibility_presets/<key>")
