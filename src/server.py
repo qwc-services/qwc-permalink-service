@@ -311,7 +311,6 @@ class UserBookmarksList(Resource):
                 result = connection.execute(sql, {"username": username}).mappings()
                 for row in result:
                     bookmark = {}
-                    bookmark['data'] = json.loads(row.data)
                     bookmark['key'] = row.key
                     bookmark['description'] = row.description
                     bookmark['date'] = row.date
