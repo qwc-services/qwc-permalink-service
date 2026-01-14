@@ -536,7 +536,7 @@ class UserBookmark(Resource):
         else:
             data = request.json
 
-        # Update into databse
+        # Update into database
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
@@ -559,6 +559,55 @@ class UserBookmark(Resource):
 
         with db.begin() as connection:
             connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description})
+
+        return jsonify({"success": True})
+
+    @api.doc('renamebookmark')
+    @api.param('description', 'Description to store in the bookmark', 'query')
+    @api.expect(userbookmark_parser)
+    @optional_auth
+    def patch(self, key):
+        username = get_username(get_identity())
+        if not username:
+            if ALLOW_PUBLIC_BOOKMARKS:
+                username = "public"
+            else:
+                return jsonify({"success": False})
+
+        endpoint = request.path.split("/")[1]
+
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
+        db, qwc_config_schema, users_table = db_conn(config)
+        if endpoint == "bookmarks":
+            user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
+        else:
+            user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
+
+        args = userbookmark_parser.parse_args()
+
+        # Update into database
+        date = datetime.date.today().strftime(r"%Y-%m-%d")
+
+        description = args['description']
+        if users_table:
+            sql = sql_text("""
+                WITH "user" AS (
+                    SELECT id FROM {users_table} WHERE name=:username
+                )
+                UPDATE {table}
+                SET username = :username, date = :date, description = :description
+                WHERE user_id = (SELECT id FROM "user") and key = :key
+            """.format(users_table=users_table, table=user_bookmark_table))
+        else:
+            sql = sql_text("""
+                UPDATE {table}
+                SET date = :date, description = :description
+                WHERE username = :username and key = :key
+            """.format(table=user_bookmark_table))
+
+        with db.begin() as connection:
+            connection.execute(sql, {"username": username, "key": key, "date": date, "description": description})
 
         return jsonify({"success": True})
 
