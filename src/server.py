@@ -51,9 +51,6 @@ userbookmark_parser.add_argument('url', required=False)
 userbookmark_parser.add_argument('description')
 
 def db_conn(config):
-    tenant = tenant_handler.tenant()
-    config = config_handler.tenant_config(tenant)
-
     db_url = config.get('db_url', 'postgresql:///?service=qwc_configdb')
     qwc_config_schema = config.get('qwc_config_schema', 'qwc_config')
     db = db_engine.db_engine(db_url)
@@ -621,6 +618,8 @@ def ready():
 @app.route("/healthz", methods=['GET'])
 def healthz():
     try:
+        tenant = tenant_handler.tenant()
+        config = config_handler.tenant_config(tenant)
         db, qwc_config_schema, users_table = db_conn(config)
         with db.connect() as connection:
             connection.execute(sql_text("SELECT 1"))
