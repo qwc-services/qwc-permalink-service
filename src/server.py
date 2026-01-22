@@ -284,7 +284,7 @@ class UserBookmarksList(Resource):
             user_bookmark_table = config.get('user_bookmark_table', qwc_config_schema + '.user_bookmarks')
         else:
             user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
-        sort_order = config.get('bookmarks_sort_order', 'date, description')
+        sort_order = config.get('bookmarks_sort_order', 'date DESC, description')
 
         if users_table:
             sql = sql_text("""

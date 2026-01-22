@@ -41,7 +41,7 @@
           "type": "string"
         },
         "bookmarks_sort_order": {
-          "description": "Bookmarks sort order, defaults to \"date, description\".",
+          "description": "Bookmarks sort order, defaults to \"date DESC, description\".",
           "type": "string"
         },
         "default_expiry_period": {
