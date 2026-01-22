@@ -4,7 +4,7 @@
 QWC Permalink Service
 =====================
 
-Stores and resolves compact permalinks for the Web Client.
+Stores and resolves compact permalinks for the QGIS Web Client.
 
 Permalinks are stored in a database table.
 
@@ -27,26 +27,21 @@ Example:
   "config": {
     "db_url": "postgresql:///?service=qwc_configdb",
     "permalinks_table": "qwc_config.permalinks",
-    "user_bookmark_table": "qwc_config.user_bookmarks"
+    "user_bookmark_table": "qwc_config.user_bookmarks",
+    "bookmarks_sort_order": "date DESC, description"
   }
 }
 ```
+
+See the [schema definition](schemas/qwc-permalink-service.json) for the full set of supported config variables.
 
 ### Environment variables
 
 Config options in the config file can be overridden by equivalent uppercase environment variables.
 
-| Variable               | Default value                         | Description           |
-|------------------------|---------------------------------------|-----------------------|
-| `DB_URL`               | `postgresql:///?service=qwc_configdb` | DB connection URL [1] |
-| `PERMALINKS_TABLE`     | `qwc_config.permalinks`               | Permalink table       |
-| `USER_BOOKMARK_TABLE`  | `qwc_config.user_bookmarks`           | User bookmarks table  |
+### Tables
 
-[1] https://docs.sqlalchemy.org/en/13/core/engines.html#postgresql
-
-If you don't use `qwc-config-db` you have to create the tables first.
-
-Example:
+If you don't use the [`qwc-base-db`](https://github.com/qwc-services/qwc-base-db), you have to create the tables first:
 
     CREATE TABLE permalinks
     (
@@ -56,13 +51,21 @@ Example:
       expires date
     );
 
-      CREATE TABLE user_bookmarks (
-          username character varying NOT NULL PRIMARY KEY,
-          data text,
-          key varchar(10),
-          date date,
-          description text
-      );
+    CREATE TABLE user_bookmarks (
+      username character varying NOT NULL PRIMARY KEY,
+      data text,
+      key varchar(10),
+      date date,
+      description text
+    );
+
+    CREATE TABLE user_visibility_presets (
+      username character varying NOT NULL PRIMARY KEY,
+      data text,
+      key varchar(10),
+      date date,
+      description text,
+    )
 
 Usage
 -----
