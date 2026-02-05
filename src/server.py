@@ -114,14 +114,18 @@ class CreatePermalink(Resource):
             INSERT INTO {table} (key, data, date, expires, permitted_group)
             VALUES (:key, :data, :date, :expires, :permitted_group)
         """.format(table=permalinks_table))
+        app.logger.debug(f"query: {sql}")
 
         attempts = 0
         while attempts < 100:
+            params = {"key": hexdigest, "data": datastr, "date": date, "expires": expires, "permitted_group": permitted_group}
+            app.logger.debug("trying with params: %s" % (params | {"data": "<data>"}))
             try:
                 with db.begin() as connection:
-                    connection.execute(sql, {"key": hexdigest, "data": datastr, "date": date, "expires": expires, "permitted_group": permitted_group})
+                    connection.execute(sql, params)
                 break
-            except:
+            except Exception as e:
+                app.logger.debug("query failed: %s" % str(e))
                 pass
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
