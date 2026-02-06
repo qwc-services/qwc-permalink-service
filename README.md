@@ -81,6 +81,10 @@ Set `FLASK_DEBUG=1` for additional debug output.
 
 Set `FLASK_RUN_PORT=<port>` to change the default port (default: `5000`).
 
+API documentation:
+
+    http://localhost:$FLASK_RUN_PORT/api/
+
 Docker usage
 ------------
 
