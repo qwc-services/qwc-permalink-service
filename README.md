@@ -67,35 +67,23 @@ If you don't use the [`qwc-base-db`](https://github.com/qwc-services/qwc-base-db
       description text,
     )
 
-Usage
------
+Run locally
+-----------
 
-Base URL:
+Install dependencies and run:
 
-    http://localhost:5018/
+    export CONFIG_PATH=<CONFIG_PATH>
+    uv run src/server.py
 
-API documentation:
+To use configs from a `qwc-docker` setup, set `CONFIG_PATH=<...>/qwc-docker/volumes/config`.
 
-    http://localhost:5018/api/
+Set `FLASK_DEBUG=1` for additional debug output.
 
+Set `FLASK_RUN_PORT=<port>` to change the default port (default: `5000`).
 
 Docker usage
 ------------
 
+The Docker image is published on [Dockerhub](https://hub.docker.com/r/sourcepole/qwc-permalink-service).
+
 See sample [docker-compose.yml](https://github.com/qwc-services/qwc-docker/blob/master/docker-compose-example.yml) of [qwc-docker](https://github.com/qwc-services/qwc-docker).
-
-
-Development
------------
-
-Set the `CONFIG_PATH` environment variable to the path containing the service config and permission files when starting this service (default: `config`).
-
-    export CONFIG_PATH=../qwc-docker/volumes/config
-
-Configure environment:
-
-    echo FLASK_ENV=development >.flaskenv
-
-Install dependencies and run service:
-
-    uv run src/server.py
