@@ -593,4 +593,4 @@ if __name__ == "__main__":
     print("Starting Permalink service...")
     from flask_cors import CORS
     CORS(app)
-    app.run(debug=True, port=5018)
+    app.run(debug=True, port=os.environ.get("FLASK_RUN_PORT", 5000))
