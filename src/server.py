@@ -47,6 +47,7 @@ resolvepermalink_parser = reqparse.RequestParser(argument_class=CaseInsensitiveA
 resolvepermalink_parser.add_argument('key', required=True)
 
 userbookmark_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgument)
+userbookmark_parser.add_argument('theme_id', required=False)
 userbookmark_parser.add_argument('url', required=False)
 userbookmark_parser.add_argument('description')
 
@@ -295,14 +296,14 @@ class UserBookmarksList(Resource):
                 WITH "user" AS (
                     SELECT id FROM {users_table} WHERE name=:username
                 )
-                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
+                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date, theme_id
                 FROM {table}
                 WHERE user_id = (SELECT id FROM "user")
                 ORDER BY {sort_order}
             """.format(users_table=users_table, table=user_bookmark_table, sort_order=sort_order))
         else:
             sql = sql_text("""
-                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date
+                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date, theme_id
                 FROM {table}
                 WHERE username = :username ORDER BY {sort_order}
             """.format(table=user_bookmark_table, sort_order=sort_order))
@@ -315,6 +316,7 @@ class UserBookmarksList(Resource):
                     bookmark['key'] = row.key
                     bookmark['description'] = row.description
                     bookmark['date'] = row.date
+                    bookmark['theme_id'] = row.theme_id
                     data.append(bookmark)
         except:
             data = []
@@ -322,6 +324,7 @@ class UserBookmarksList(Resource):
 
     @api.doc('addbookmark')
     @api.param('url', 'The URL for which to generate a bookmark', 'query')
+    @api.param('theme_id', 'The theme ID of the generated bookmark', 'query')
     @api.param('payload', 'A json document with the state to store in the bookmark', 'body')
     @api.param('description', 'Description to store in the bookmark', 'query')
     @api.expect(userbookmark_parser)
@@ -365,6 +368,7 @@ class UserBookmarksList(Resource):
             }
         else:
             data = request.json
+        theme_id = args['theme_id']
 
         # Insert into database
         datastr = json.dumps(data)
@@ -377,24 +381,24 @@ class UserBookmarksList(Resource):
                 WITH "user" AS (
                     SELECT id FROM {users_table} WHERE name=:username
                 )
-                INSERT INTO {table} (user_id, username, data, key, date, description)
-                VALUES ((SELECT id FROM "user"), :username, :data, :key, :date, :description)
+                INSERT INTO {table} (user_id, username, data, key, date, description, theme_id)
+                VALUES ((SELECT id FROM "user"), :username, :data, :key, :date, :description, :theme_id)
             """.format(users_table=users_table, table=user_bookmark_table))
         else:
             sql = sql_text("""
-                INSERT INTO {table} (username, data, key, date, description)
-                VALUES (:username, :data, :key, :date, :description)
+                INSERT INTO {table} (username, data, key, date, description, theme_id)
+                VALUES (:username, :data, :key, :date, :description, :theme_id)
                 ON CONFLICT (username,key) WHERE username = :username
                 DO
                 UPDATE
-                SET data = :data, date = :date, description = :description
+                SET data = :data, date = :date, description = :description, theme_id = :theme_id
             """.format(table=user_bookmark_table))
 
         attempts = 0
         while attempts < 100:
             try:
                 with db.begin() as connection:
-                    connection.execute(sql, {"username": username, "data": datastr, "key": hexdigest, "date": date, "description": description})
+                    connection.execute(sql, {"username": username, "data": datastr, "key": hexdigest, "date": date, "description": description, "theme_id": theme_id})
                     break
             except:
                 pass
@@ -494,6 +498,7 @@ class UserBookmark(Resource):
 
     @api.doc('setbookmark')
     @api.param('url', 'The URL for which to generate a bookmark', 'query')
+    @api.param('theme_id', 'The theme ID of the generated bookmark', 'query')
     @api.param('payload', 'A json document with the state to store in the bookmark', 'body')
     @api.param('description', 'Description to store in the bookmark', 'query')
     @api.expect(userbookmark_parser)
@@ -540,6 +545,8 @@ class UserBookmark(Resource):
         else:
             data = None
 
+        theme_id = args['theme_id']
+
         # Update into database
         datastr = json.dumps(data)
         date = datetime.date.today().strftime(r"%Y-%m-%d")
@@ -552,18 +559,18 @@ class UserBookmark(Resource):
                     SELECT id FROM {users_table} WHERE name=:username
                 )
                 UPDATE {table}
-                SET username = :username, date = :date, description = :description{data_sql}
+                SET username = :username, date = :date, description = :description, theme_id = :theme_id{data_sql}
                 WHERE user_id = (SELECT id FROM "user") and key = :key
             """.format(users_table=users_table, table=user_bookmark_table, data_sql=data_sql))
         else:
             sql = sql_text("""
                 UPDATE {table}
-                SET date = :date, description = :description{data_sql}
+                SET date = :date, description = :description, theme_id = :theme_id{data_sql}
                 WHERE username = :username and key = :key
             """.format(table=user_bookmark_table, data_sql=data_sql))
 
         with db.begin() as connection:
-            connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description})
+            connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description, "theme_id": theme_id})
 
         return jsonify({"success": True})
 
