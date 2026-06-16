@@ -438,19 +438,22 @@ class UserBookmark(Resource):
                 WITH "user" AS (
                     SELECT id FROM {users_table} WHERE name=:username
                 )
-                SELECT data
+                SELECT data, theme_id
                 FROM {table}
                 WHERE user_id = (SELECT id FROM "user") AND key = :key
             """.format(users_table=users_table, table=user_bookmark_table))
         else:
             sql = sql_text("""
-                SELECT data
+                SELECT data, theme_id
                 FROM {table}
                 WHERE username = :username and key = :key
             """.format(table=user_bookmark_table))
         try:
             with db.connect() as connection:
-                data = json.loads(connection.execute(sql, {"username": username, "key": key}).mappings().first()["data"])
+                row = connection.execute(sql, {"username": username, "key": key}).mappings().first()
+                data = json.loads(row["data"])
+                if endpoint == "visibility_presets":
+                    data = {"visibility_preset": data, "theme_id": row["theme_id"]}
         except Exception as e:
             print(e)
             data = {}
