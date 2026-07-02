@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, make_response
-from flask_restx import Api, Resource, reqparse
+from flask_restx import Resource, reqparse
 import datetime
 import hashlib
 import os
@@ -9,8 +9,8 @@ import time
 from urllib.parse import urlparse, parse_qs
 from sqlalchemy.sql import text as sql_text
 
+from qwc_services_core.api import Api, CaseInsensitiveArgument
 from qwc_services_core.auth import auth_manager, optional_auth, get_identity, get_username
-from qwc_services_core.api import CaseInsensitiveArgument
 from qwc_services_core.database import DatabaseEngine
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.tenant_handler import (
