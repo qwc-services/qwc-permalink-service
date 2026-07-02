@@ -76,6 +76,7 @@ class CreatePermalink(Resource):
     @api.expect(createpermalink_parser)
     @optional_auth
     def post(self):
+        """ Create a permalink """
         args = createpermalink_parser.parse_args()
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
@@ -157,6 +158,7 @@ class ResolvePermalink(Resource):
     @api.expect(resolvepermalink_parser)
     @optional_auth
     def get(self):
+        """ Resolve a permalink """
         args = resolvepermalink_parser.parse_args()
         tenant = tenant_handler.tenant()
         config = config_handler.tenant_config(tenant)
@@ -196,6 +198,7 @@ class UserPermalink(Resource):
     @api.doc('getuserpermalink')
     @optional_auth
     def get(self):
+        """ Get a user permalink """
         username = get_username(get_identity())
         if not username:
             return jsonify({})
@@ -223,6 +226,7 @@ class UserPermalink(Resource):
     @api.expect(createpermalink_parser)
     @optional_auth
     def post(self):
+        """ Create a user permalink """
         username = get_username(get_identity())
         if not username:
             return jsonify({"success": False})
@@ -273,6 +277,7 @@ class UserBookmarksList(Resource):
     @api.doc('getbookmarks')
     @optional_auth
     def get(self):
+        """ Get the list of bookmarks or visibility presets """
         username = get_username(get_identity())
         if not username:
             if ALLOW_PUBLIC_BOOKMARKS:
@@ -324,12 +329,13 @@ class UserBookmarksList(Resource):
 
     @api.doc('addbookmark')
     @api.param('url', 'The URL for which to generate a bookmark', 'query')
-    @api.param('theme_id', 'The theme ID of the generated bookmark', 'query')
-    @api.param('payload', 'A json document with the state to store in the bookmark', 'body')
-    @api.param('description', 'Description to store in the bookmark', 'query')
+    @api.param('theme_id', 'The theme ID of the bookmark / visibility preset', 'query')
+    @api.param('payload', 'A json document with the state to store', 'body')
+    @api.param('description', 'The description of the bookmark / visibility preset', 'query')
     @api.expect(userbookmark_parser)
     @optional_auth
     def post(self):
+        """ Store a bookmark or visibility preset """
         username = get_username(get_identity())
         if not username:
             if ALLOW_PUBLIC_BOOKMARKS:
@@ -416,6 +422,7 @@ class UserBookmark(Resource):
     @api.doc('getbookmark')
     @optional_auth
     def get(self, key):
+        """ Get a bookmark or visibility preset """
         username = get_username(get_identity())
         if not username:
             if ALLOW_PUBLIC_BOOKMARKS:
@@ -462,6 +469,7 @@ class UserBookmark(Resource):
     @api.doc('deletebookmark')
     @optional_auth
     def delete(self, key):
+        """ Delete a bookmark or visibility preset """
         username = get_username(get_identity())
         if not username:
             if ALLOW_PUBLIC_BOOKMARKS:
@@ -500,13 +508,14 @@ class UserBookmark(Resource):
         return jsonify({"success": True})
 
     @api.doc('setbookmark')
-    @api.param('url', 'The URL for which to generate a bookmark', 'query')
-    @api.param('theme_id', 'The theme ID of the generated bookmark', 'query')
-    @api.param('payload', 'A json document with the state to store in the bookmark', 'body')
-    @api.param('description', 'Description to store in the bookmark', 'query')
+    @api.param('url', 'The URL for which to generate a bookmark / visibility preset', 'query')
+    @api.param('theme_id', 'The theme ID of the bookmark / visibility preset', 'query')
+    @api.param('payload', 'A json document with the state to store', 'body')
+    @api.param('description', 'Description of the bookmark / visibility preset', 'query')
     @api.expect(userbookmark_parser)
     @optional_auth
     def put(self, key):
+        """ Update a bookmark or visibility preset """
         username = get_username(get_identity())
         if not username:
             if ALLOW_PUBLIC_BOOKMARKS:
