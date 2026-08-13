@@ -180,6 +180,11 @@ class ResolvePermalink(Resource):
                 permitted_group = result["permitted_group"]
         except:
             pass
+
+        # Backward compatibility
+        if "permalinkParams" in data.get("state", {}):
+            data["query"] = data.get("query") | data["state"]["permalinkParams"]
+
         if permitted_group:
             app.logger.debug("Permalink %s is restricted to group %s" % (key, permitted_group))
             username = get_username(get_identity())
@@ -217,6 +222,11 @@ class UserPermalink(Resource):
                 data = json.loads(connection.execute(sql, {"user": username}).mappings().first()["data"])
         except:
             data = {}
+
+        # Backward compatibility
+        if "permalinkParams" in data.get("state", {}):
+            data["query"] = data.get("query") | data["state"]["permalinkParams"]
+
         return jsonify(data)
 
     @api.doc('postuserpermalink')
@@ -463,6 +473,11 @@ class UserBookmark(Resource):
         except Exception as e:
             app.logger.debug("Query failed: %s" % str(e))
             data = {}
+
+        # Backward compatibility
+        if "permalinkParams" in data.get("state", {}):
+            data["query"] = data.get("query") | data["state"]["permalinkParams"]
+
         return jsonify(data)
 
     @api.doc('deletebookmark')
