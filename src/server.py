@@ -6,7 +6,7 @@ import os
 import random
 import json
 import time
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qsl
 from sqlalchemy.sql import text as sql_text
 
 from qwc_services_core.api import Api, CaseInsensitiveArgument
@@ -86,19 +86,15 @@ class CreatePermalink(Resource):
 
         state = request.json
         if "url" in state:
-            url = state["url"]
+            parts = urlparse(state["url"])
             del state["url"]
         elif "url" in args:
-            url = args['url']
+            parts = urlparse(args["url"])
         else:
             api.abort(400, "No URL specified")
 
-        parts = urlparse(url)
-        query = parse_qs(parts.query, keep_blank_values=True)
-        for key in query:
-            query[key] = query[key][0]
         data = {
-            "query": query,
+            "query": dict(parse_qsl(parts.query, True)),
             "state": state
         }
         permitted_group = args.get('permitted_group', None)
@@ -239,16 +235,13 @@ class UserPermalink(Resource):
         args = createpermalink_parser.parse_args()
         state = request.json
         if "url" in state:
-            url = state["url"]
+            query = dict(parse_qsl(urlparse(state["url"]).query, True))
             del state["url"]
         elif "url" in args:
-            url = args['url']
+            query = dict(parse_qsl(urlparse(args["url"]).query, True))
         else:
             api.abort(400, "No URL specified")
-        parts = urlparse(url)
-        query = parse_qs(parts.query, keep_blank_values=True)
-        for key in query:
-            query[key] = query[key][0]
+
         data = {
             "query": query,
             "state": state
@@ -358,16 +351,13 @@ class UserBookmarksList(Resource):
         if endpoint == "bookmarks":
             state = request.json
             if "url" in state:
-                url = state["url"]
+                query = dict(parse_qsl(urlparse(state["url"]).query, True))
                 del state["url"]
             elif "url" in args:
-                url = args['url']
+                query = dict(parse_qsl(urlparse(args["url"]).query, True))
             else:
                 api.abort(400, "No URL specified")
-            parts = urlparse(url)
-            query = parse_qs(parts.query, keep_blank_values=True)
-            for key in query:
-                query[key] = query[key][0]
+
             data = {
                 "query": query,
                 "state": state
@@ -538,16 +528,12 @@ class UserBookmark(Resource):
             if endpoint == "bookmarks":
                 state = request.json
                 if "url" in state:
-                    url = state["url"]
+                    query = dict(parse_qsl(urlparse(state["url"]).query, True))
                     del state["url"]
                 elif "url" in args:
-                    url = args['url']
+                    query = dict(parse_qsl(urlparse(args["url"]).query, True))
                 else:
                     api.abort(400, "No URL specified")
-                parts = urlparse(url)
-                query = parse_qs(parts.query, keep_blank_values=True)
-                for k in query:
-                    query[k] = query[k][0]
                 data = {
                     "query": query,
                     "state": state
