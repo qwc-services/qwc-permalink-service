@@ -536,6 +536,14 @@ class UserBookmark(Resource):
             user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
 
         args = userbookmark_parser.parse_args()
+
+        set_sql = "date = :date"
+        set_params = {
+            "key": key,
+            "username": username,
+            "date": datetime.date.today().strftime(r"%Y-%m-%d")
+        }
+        # Data
         if request.is_json:
             if endpoint == "bookmarks":
                 state = request.json
@@ -546,42 +554,47 @@ class UserBookmark(Resource):
                     query = dict(parse_qsl(urlparse(args["url"]).query, True))
                 else:
                     api.abort(400, "No URL specified")
-                data = {
+
+                set_params["data"] = json.dumps({
                     "query": query,
                     "state": state
-                }
+                })
+                set_sql += ", data = :data"
             else:
-                data = request.json
-        else:
-            data = None
+                set_params["data"] = json.dumps(request.json)
+                set_sql += ", data = :data"
 
-        theme_id = args['theme_id']
+        # Description
+        if args['description'] is not None:
+            set_params["description"] = args['description']
+            set_sql += ", description = :description"
 
-        # Update into database
-        datastr = json.dumps(data)
-        date = datetime.date.today().strftime(r"%Y-%m-%d")
-      
-        description = args['description']
-        data_sql = ", data = :data" if data else ""
+        # Theme Id
+        if args['theme_id'] is not None:
+            set_params['theme_id'] = args['theme_id']
+            set_sql += ", theme_id = :theme_id"
+
+
+
         if users_table:
             sql = sql_text("""
                 WITH "user" AS (
                     SELECT id FROM {users_table} WHERE name=:username
                 )
                 UPDATE {table}
-                SET username = :username, date = :date, description = :description, theme_id = :theme_id{data_sql}
-                WHERE user_id = (SELECT id FROM "user") and key = :key
-            """.format(users_table=users_table, table=user_bookmark_table, data_sql=data_sql))
+                SET username = :username{set_sql}
+                WHERE key = :key AND (user_id = (SELECT id FROM "user"))
+            """.format(users_table=users_table, table=user_bookmark_table, set_sql=set_sql))
         else:
             sql = sql_text("""
                 UPDATE {table}
-                SET date = :date, description = :description, theme_id = :theme_id{data_sql}
-                WHERE username = :username and key = :key
-            """.format(table=user_bookmark_table, data_sql=data_sql))
+                SET {set_sql}
+                WHERE key = :key AND (username = :username)
+            """.format(table=user_bookmark_table, set_sql=set_sql))
 
         try:
             with db.begin() as connection:
-                result = connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description, "theme_id": theme_id})
+                result = connection.execute(sql, set_params)
                 return jsonify({"success": result.rowcount == 1})
         except Exception as e:
             app.logger.debug("Query failed: %s" % str(e))
