@@ -123,7 +123,7 @@ class CreatePermalink(Resource):
                     connection.execute(sql, params)
                 break
             except Exception as e:
-                app.logger.debug("query failed: %s" % str(e))
+                app.logger.debug("Query failed: %s" % str(e))
                 pass
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
@@ -133,8 +133,11 @@ class CreatePermalink(Resource):
             DELETE FROM {table}
             WHERE expires < CURRENT_DATE
         """.format(table=permalinks_table))
-        with db.begin() as connection:
-            connection.execute(sql)
+        try:
+            with db.begin() as connection:
+                connection.execute(sql)
+        except:
+            pass
 
         # Return
         if attempts < 100:
@@ -259,8 +262,12 @@ class UserPermalink(Resource):
             SET data = :data, date = :date
         """.format(table=user_permalink_table))
 
-        with db.begin() as connection:
-            connection.execute(sql, {"user": username, "data": datastr, "date": date})
+        try:
+            with db.begin() as connection:
+                connection.execute(sql, {"user": username, "data": datastr, "date": date})
+        except Exception as e:
+            app.logger.debug("Query failed: %s" % str(e))
+            return jsonify({"success": False})
 
         return jsonify({"success": True})
 
@@ -317,6 +324,7 @@ class UserBookmarksList(Resource):
                     bookmark['theme_id'] = row.theme_id
                     data.append(bookmark)
         except:
+            app.logger.debug("Query failed: %s" % str(e))
             data = []
         return jsonify(data)
 
@@ -396,7 +404,8 @@ class UserBookmarksList(Resource):
                 with db.begin() as connection:
                     connection.execute(sql, {"username": username, "data": datastr, "key": hexdigest, "date": date, "description": description, "theme_id": theme_id})
                     break
-            except:
+            except Exception as e:
+                app.logger.debug("Query failed: %s" % str(e))
                 pass
             hexdigest = hashlib.sha224((datastr + str(random.random())).encode('utf-8')).hexdigest()[0:9]
             attempts += 1
@@ -452,7 +461,7 @@ class UserBookmark(Resource):
                 if endpoint == "visibility_presets":
                     data = {"visibility_preset": data, "theme_id": row["theme_id"]}
         except Exception as e:
-            print(e)
+            app.logger.debug("Query failed: %s" % str(e))
             data = {}
         return jsonify(data)
 
@@ -492,8 +501,11 @@ class UserBookmark(Resource):
                 WHERE key = :key and username = :username
             """.format(table=user_bookmark_table))
 
-        with db.begin() as connection:
-            connection.execute(sql, {"key": key, "username": username})
+        try:
+            with db.begin() as connection:
+                connection.execute(sql, {"key": key, "username": username})
+        except Exception as e:
+            app.logger.debug("Query failed: %s" % str(e))
 
         return jsonify({"success": True})
 
@@ -567,10 +579,14 @@ class UserBookmark(Resource):
                 WHERE username = :username and key = :key
             """.format(table=user_bookmark_table, data_sql=data_sql))
 
-        with db.begin() as connection:
-            connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description, "theme_id": theme_id})
+        try:
+            with db.begin() as connection:
+                result = connection.execute(sql, {"username": username, "data": datastr, "key": key, "date": date, "description": description, "theme_id": theme_id})
+                return jsonify({"success": result.rowcount == 1})
+        except Exception as e:
+            app.logger.debug("Query failed: %s" % str(e))
+            return jsonify({"success": False})
 
-        return jsonify({"success": True})
 
 """ readyness probe endpoint """
 @app.route("/ready", methods=['GET'])
