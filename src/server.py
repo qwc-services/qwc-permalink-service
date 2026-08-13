@@ -50,6 +50,7 @@ userbookmark_parser = reqparse.RequestParser(argument_class=CaseInsensitiveArgum
 userbookmark_parser.add_argument('theme_id', required=False)
 userbookmark_parser.add_argument('url', required=False)
 userbookmark_parser.add_argument('description')
+userbookmark_parser.add_argument('public', required=False)
 
 def db_conn(config):
     db_url = config.get('db_url', 'postgresql:///?service=qwc_configdb')
@@ -288,12 +289,7 @@ class UserBookmarksList(Resource):
     @optional_auth
     def get(self):
         """ Get the list of bookmarks or visibility presets """
-        username = get_username(get_identity())
-        if not username:
-            if ALLOW_PUBLIC_BOOKMARKS:
-                username = "public"
-            else:
-                return jsonify([])
+        username = get_username(get_identity()) or "public"
 
         endpoint = request.path.split("/")[1]
 
@@ -311,29 +307,32 @@ class UserBookmarksList(Resource):
                 WITH "user" AS (
                     SELECT id FROM {users_table} WHERE name=:username
                 )
-                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date, theme_id
+                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date, theme_id, public, COALESCE(user_id = (SELECT id FROM "user"), FALSE) as own
                 FROM {table}
-                WHERE user_id = (SELECT id FROM "user")
+                WHERE user_id = (SELECT id FROM "user") OR public = TRUE
                 ORDER BY {sort_order}
             """.format(users_table=users_table, table=user_bookmark_table, sort_order=sort_order))
         else:
             sql = sql_text("""
-                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date, theme_id
+                SELECT data, key, description, to_char(date, 'YYYY-MM-DD') as date, theme_id, public, (username = :username) as own
                 FROM {table}
-                WHERE username = :username ORDER BY {sort_order}
+                WHERE username = :username OR public = TRUE
+                ORDER BY {sort_order}
             """.format(table=user_bookmark_table, sort_order=sort_order))
         try:
             data = []
             with db.connect() as connection:
                 result = connection.execute(sql, {"username": username}).mappings()
                 for row in result:
-                    bookmark = {}
-                    bookmark['key'] = row.key
-                    bookmark['description'] = row.description
-                    bookmark['date'] = row.date
-                    bookmark['theme_id'] = row.theme_id
-                    data.append(bookmark)
-        except:
+                    data.append({
+                        'key': row.key,
+                        'description': row.description,
+                        'date': row.date,
+                        'theme_id': row.theme_id,
+                        'public': row.public,
+                        'own': row.own
+                    })
+        except Exception as e:
             app.logger.debug("Query failed: %s" % str(e))
             data = []
         return jsonify(data)
@@ -343,6 +342,7 @@ class UserBookmarksList(Resource):
     @api.param('theme_id', 'The theme ID of the bookmark / visibility preset', 'query')
     @api.param('payload', 'A json document with the state to store', 'body')
     @api.param('description', 'The description of the bookmark / visibility preset', 'query')
+    @api.param('public', 'Whether the bookmark is public (visible for all users)')
     @api.expect(userbookmark_parser)
     @optional_auth
     def post(self):
@@ -390,29 +390,35 @@ class UserBookmarksList(Resource):
         date = datetime.date.today().strftime(r"%Y-%m-%d")
       
         description = args['description']
+        permitted_capabilities = PermissionsReader(tenant, app.logger).resource_permissions(
+            'capabilities', get_identity()
+        )
+        public = 'public_bookmarks' in permitted_capabilities and (args['public'] or 'False').lower() in ['true', '1']
         if users_table:
             sql = sql_text("""
                 WITH "user" AS (
                     SELECT id FROM {users_table} WHERE name=:username
                 )
-                INSERT INTO {table} (user_id, username, data, key, date, description, theme_id)
-                VALUES ((SELECT id FROM "user"), :username, :data, :key, :date, :description, :theme_id)
+                INSERT INTO {table} (user_id, username, data, key, date, description, theme_id, public)
+                VALUES ((SELECT id FROM "user"), :username, :data, :key, :date, :description, :theme_id, :public)
             """.format(users_table=users_table, table=user_bookmark_table))
         else:
             sql = sql_text("""
-                INSERT INTO {table} (username, data, key, date, description, theme_id)
-                VALUES (:username, :data, :key, :date, :description, :theme_id)
+                INSERT INTO {table} (username, data, key, date, description, theme_id, public)
+                VALUES (:username, :data, :key, :date, :description, :theme_id, :public)
                 ON CONFLICT (username,key) WHERE username = :username
                 DO
                 UPDATE
-                SET data = :data, date = :date, description = :description, theme_id = :theme_id
+                SET data = :data, date = :date, description = :description, theme_id = :theme_id, public = :public
             """.format(table=user_bookmark_table))
 
         attempts = 0
         while attempts < 100:
             try:
                 with db.begin() as connection:
-                    connection.execute(sql, {"username": username, "data": datastr, "key": hexdigest, "date": date, "description": description, "theme_id": theme_id})
+                    connection.execute(sql, {
+                        "username": username, "data": datastr, "key": hexdigest, "date": date, "description": description, "theme_id": theme_id, "public": public
+                    })
                     break
             except Exception as e:
                 app.logger.debug("Query failed: %s" % str(e))
@@ -432,12 +438,7 @@ class UserBookmark(Resource):
     @optional_auth
     def get(self, key):
         """ Get a bookmark or visibility preset """
-        username = get_username(get_identity())
-        if not username:
-            if ALLOW_PUBLIC_BOOKMARKS:
-                username = "public"
-            else:
-                return jsonify({"success": False})
+        username = get_username(get_identity()) or "public"
 
         endpoint = request.path.split("/")[1]
 
@@ -456,13 +457,13 @@ class UserBookmark(Resource):
                 )
                 SELECT data, theme_id
                 FROM {table}
-                WHERE user_id = (SELECT id FROM "user") AND key = :key
+                WHERE (user_id = (SELECT id FROM "user") OR public = TRUE) AND key = :key
             """.format(users_table=users_table, table=user_bookmark_table))
         else:
             sql = sql_text("""
                 SELECT data, theme_id
                 FROM {table}
-                WHERE username = :username and key = :key
+                WHERE (username = :username OR public = TRUE) and key = :key
             """.format(table=user_bookmark_table))
         try:
             with db.connect() as connection:
@@ -501,6 +502,11 @@ class UserBookmark(Resource):
         else:
             user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
 
+        permitted_capabilities = PermissionsReader(tenant, app.logger).resource_permissions(
+            'capabilities', get_identity()
+        )
+        public_cond_sql = "OR public = TRUE" if 'public_bookmarks' in permitted_capabilities else ""
+
         # Delete into databse
         if users_table:
             sql = sql_text("""
@@ -508,13 +514,13 @@ class UserBookmark(Resource):
                     SELECT id FROM {users_table} WHERE name=:username
                 )
                 DELETE FROM {table}
-                WHERE key = :key and user_id = (SELECT id FROM "user")
-            """.format(users_table=users_table, table=user_bookmark_table))
+                WHERE key = :key AND (user_id = (SELECT id FROM "user") {public_cond_sql})
+            """.format(users_table=users_table, table=user_bookmark_table, public_cond_sql=public_cond_sql))
         else:
             sql = sql_text("""
                 DELETE FROM {table}
-                WHERE key = :key and username = :username
-            """.format(table=user_bookmark_table))
+                WHERE key = :key AND (username = :username {public_cond_sql})
+            """.format(table=user_bookmark_table, public_cond_sql=public_cond_sql))
 
         try:
             with db.begin() as connection:
@@ -529,6 +535,7 @@ class UserBookmark(Resource):
     @api.param('theme_id', 'The theme ID of the bookmark / visibility preset', 'query')
     @api.param('payload', 'A json document with the state to store', 'body')
     @api.param('description', 'Description of the bookmark / visibility preset', 'query')
+    @api.param('public', 'Whether the bookmark is public (visible for all users)')
     @api.expect(userbookmark_parser)
     @optional_auth
     def put(self, key):
@@ -551,6 +558,11 @@ class UserBookmark(Resource):
             user_bookmark_table = config.get('user_visibility_presets_table', qwc_config_schema + '.user_visibility_presets')
 
         args = userbookmark_parser.parse_args()
+
+        permitted_capabilities = PermissionsReader(tenant, app.logger).resource_permissions(
+            'capabilities', get_identity()
+        )
+        public_cond_sql = "OR public = TRUE" if 'public_bookmarks' in permitted_capabilities else ""
 
         set_sql = "date = :date"
         set_params = {
@@ -589,6 +601,10 @@ class UserBookmark(Resource):
             set_params['theme_id'] = args['theme_id']
             set_sql += ", theme_id = :theme_id"
 
+        # Public
+        if 'public_bookmarks' in permitted_capabilities and args['public'] is not None:
+            set_params['public'] = args['public'].lower() in ['true', '1']
+            set_sql += ", public = :public"
 
 
         if users_table:
@@ -598,14 +614,14 @@ class UserBookmark(Resource):
                 )
                 UPDATE {table}
                 SET username = :username{set_sql}
-                WHERE key = :key AND (user_id = (SELECT id FROM "user"))
-            """.format(users_table=users_table, table=user_bookmark_table, set_sql=set_sql))
+                WHERE key = :key AND (user_id = (SELECT id FROM "user") {public_cond_sql})
+            """.format(users_table=users_table, table=user_bookmark_table, set_sql=set_sql, public_cond_sql=public_cond_sql))
         else:
             sql = sql_text("""
                 UPDATE {table}
                 SET {set_sql}
-                WHERE key = :key AND (username = :username)
-            """.format(table=user_bookmark_table, set_sql=set_sql))
+                WHERE key = :key AND (username = :username {public_cond_sql})
+            """.format(table=user_bookmark_table, set_sql=set_sql, public_cond_sql=public_cond_sql))
 
         try:
             with db.begin() as connection:
