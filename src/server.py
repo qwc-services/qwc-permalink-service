@@ -613,7 +613,7 @@ class UserBookmark(Resource):
                     SELECT id FROM {users_table} WHERE name=:username
                 )
                 UPDATE {table}
-                SET username = :username{set_sql}
+                SET username = :username, {set_sql}
                 WHERE key = :key AND (user_id = (SELECT id FROM "user") {public_cond_sql})
             """.format(users_table=users_table, table=user_bookmark_table, set_sql=set_sql, public_cond_sql=public_cond_sql))
         else:
