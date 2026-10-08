@@ -330,7 +330,8 @@ class UserBookmarksList(Resource):
                         'date': row.date,
                         'theme_id': row.theme_id,
                         'public': row.public,
-                        'own': row.own
+                        'own': row.own,
+                        'data': json.loads(row.data) if endpoint == 'visibility_presets' else None
                     })
         except Exception as e:
             app.logger.debug("Query failed: %s" % str(e))
